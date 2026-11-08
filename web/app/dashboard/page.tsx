@@ -51,6 +51,9 @@ export default function DashboardPage() {
             <Link href="/admin/registrations" className="underline">
               Registrations and draw
             </Link>
+            <Link href="/admin/bracket" className="underline">
+              Bracket and scores
+            </Link>
           </>
         )}
       </div>
