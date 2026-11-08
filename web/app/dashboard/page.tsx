@@ -43,6 +43,9 @@ export default function DashboardPage() {
         <Link href="/tournaments" className="underline">
           Browse tournaments
         </Link>
+        <Link href="/bracket" className="underline">
+          Live brackets
+        </Link>
         {profile.role === "admin" && (
           <>
             <Link href="/admin/tournaments" className="underline">
