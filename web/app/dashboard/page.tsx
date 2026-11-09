@@ -46,6 +46,9 @@ export default function DashboardPage() {
         <Link href="/bracket" className="underline">
           Live brackets
         </Link>
+        <Link href="/leaderboard" className="underline">
+          Leaderboard
+        </Link>
         {profile.role === "admin" && (
           <>
             <Link href="/admin/tournaments" className="underline">
@@ -56,6 +59,9 @@ export default function DashboardPage() {
             </Link>
             <Link href="/admin/bracket" className="underline">
               Bracket and scores
+            </Link>
+            <Link href="/admin/results" className="underline">
+              Event points
             </Link>
           </>
         )}
