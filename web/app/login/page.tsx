@@ -21,7 +21,11 @@ export default function LoginPage() {
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     setLoading(false);
     if (error) {
-      setError(error.message);
+      setError(
+        error.message.toLowerCase().includes("not confirmed")
+          ? "Please confirm your email first. Check your inbox for the link."
+          : error.message
+      );
       return;
     }
     router.push("/dashboard");
@@ -41,6 +45,7 @@ export default function LoginPage() {
           {loading ? "Logging in..." : "Log in"}
         </button>
       </form>
+      <Link href="/forgot-password" className="text-sm underline">Forgot your password?</Link>
       <p className="text-sm">
         No account yet? <Link href="/register" className="underline">Register</Link>
       </p>
