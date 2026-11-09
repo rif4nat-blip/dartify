@@ -63,6 +63,9 @@ export default function DashboardPage() {
             <Link href="/admin/results" className="underline">
               Event points
             </Link>
+            <Link href="/admin/print" className="underline">
+              Printable player list
+            </Link>
           </>
         )}
       </div>
