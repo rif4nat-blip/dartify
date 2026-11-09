@@ -31,6 +31,7 @@ type Reg = {
   team_id: string | null;
   payment_status: string;
 };
+type Count = { event_id: string; players: number; teams: number };
 
 const input = "w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-black";
 const button = "rounded-lg bg-green-600 px-4 py-2 font-semibold text-white";
@@ -51,6 +52,7 @@ export default function TournamentsPage() {
   const [events, setEvents] = useState<EventRow[]>([]);
   const [teams, setTeams] = useState<Team[]>([]);
   const [regs, setRegs] = useState<Reg[]>([]);
+  const [counts, setCounts] = useState<Count[]>([]);
 
   const [openEvent, setOpenEvent] = useState<string | null>(null);
   const [teamName, setTeamName] = useState("");
@@ -70,16 +72,18 @@ export default function TournamentsPage() {
         .single();
       setMyName(p?.full_name ?? "");
     }
-    const [t, e, tm, r] = await Promise.all([
+    const [t, e, tm, r, c] = await Promise.all([
       supabase.from("tournaments").select("*").order("event_date"),
       supabase.from("events").select("*"),
       supabase.from("teams").select("*"),
       supabase.from("registrations").select("*"),
+      supabase.from("event_counts").select("*"),
     ]);
     setTournaments(t.data ?? []);
     setEvents(e.data ?? []);
     setTeams(tm.data ?? []);
     setRegs(r.data ?? []);
+    setCounts((c.data ?? []) as Count[]);
   }, []);
 
   useEffect(() => {
@@ -180,9 +184,8 @@ export default function TournamentsPage() {
                   ? regs.filter((r) => r.team_id === mine.team_id && r.id !== mine.id)
                   : [];
                 const isFixed = ev.category === "fixed";
-                const count = isFixed
-                  ? teams.filter((tm) => tm.event_id === ev.id).length
-                  : regs.filter((r) => r.event_id === ev.id).length;
+                const c = counts.find((x) => x.event_id === ev.id);
+                const count = c ? (isFixed ? c.teams : c.players) : 0;
                 const full = ev.max_entries !== null && count >= ev.max_entries;
 
                 return (
