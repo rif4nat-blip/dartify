@@ -52,7 +52,7 @@ export default function RegisterPage() {
 
   if (sent) {
     return (
-      <main className="mx-auto flex min-h-screen max-w-sm flex-col justify-center gap-4 p-6">
+      <main className="mx-auto flex min-h-[70vh] max-w-sm flex-col justify-center gap-4 p-6">
         <h1 className="text-2xl font-bold">Check your email</h1>
         <p>
           We sent a confirmation link to <strong>{email}</strong>. Open it, then log in.
@@ -63,7 +63,7 @@ export default function RegisterPage() {
   }
 
   return (
-    <main className="mx-auto flex min-h-screen max-w-sm flex-col justify-center gap-4 p-6">
+    <main className="mx-auto flex min-h-[70vh] max-w-sm flex-col justify-center gap-4 p-6">
       <h1 className="text-2xl font-bold">Create your Dartify account</h1>
       <form onSubmit={handleSubmit} className="flex flex-col gap-3">
         <input className={input} placeholder="Full name" value={fullName}
