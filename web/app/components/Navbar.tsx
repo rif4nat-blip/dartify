@@ -30,6 +30,7 @@ export default function Navbar() {
     ["Leaderboard", "/leaderboard"],
   ];
   if (signedIn) links.unshift(["Dashboard", "/dashboard"]);
+  if (signedIn) links.push(["Profile", "/profile"]);
 
   const linkClass = "text-sm text-gray-300 hover:text-white";
   const btnOutline =
