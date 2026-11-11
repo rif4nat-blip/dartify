@@ -1,9 +1,10 @@
-"use client";
+﻿"use client";
 
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
+import { applyResult, championOf, layout, link, settle } from "@/lib/doubleElim";
 
 type Tournament = { id: string; name: string };
 type EventRow = {
@@ -27,6 +28,7 @@ type Entry = { id: string; event_id: string; name: string; seed: number | null }
 type Match = {
   id: string;
   event_id: string;
+  bracket: string;
   round: number;
   match_no: number;
   entry1_id: string | null;
@@ -38,6 +40,7 @@ type Match = {
   winner_id: string | null;
   status: string;
   next_match_id: string | null;
+  loser_next_match_id: string | null;
 };
 type NewMatch = {
   event_id: string;
@@ -141,20 +144,61 @@ export default function AdminBracketPage() {
   }, [router, load]);
 
   const ev = events.find((x) => x.id === eventId);
+  const isDouble = ev?.format === "double";
   const evMatches = matches
     .filter((m) => m.event_id === eventId)
     .sort((a, b) => a.round - b.round || a.match_no - b.match_no);
-  const rounds = evMatches.reduce((mx, m) => Math.max(mx, m.round), 0);
+  const winnersMatches = evMatches.filter((m) => (m.bracket ?? "winners") === "winners");
+  const rounds = winnersMatches.reduce((mx, m) => Math.max(mx, m.round), 0);
   const hasBracket = evMatches.length > 0;
-  const finalMatch = evMatches.find((m) => m.round === rounds);
-  const champion =
-    finalMatch?.status === "completed"
-      ? entries.find((x) => x.id === finalMatch.winner_id)?.name
-      : null;
 
-  function label(id: string | null, round: number) {
+  let champion: string | null | undefined = null;
+  if (isDouble) {
+    const id = championOf(evMatches);
+    champion = id ? entries.find((x) => x.id === id)?.name : null;
+  } else {
+    const finalMatch = winnersMatches.find((m) => m.round === rounds);
+    champion =
+      finalMatch?.status === "completed"
+        ? entries.find((x) => x.id === finalMatch.winner_id)?.name
+        : null;
+  }
+
+  // matches that were skipped because nobody can ever play them are hidden
+  const visible = evMatches.filter(
+    (m) => !(m.status === "completed" && !m.entry1_id && !m.entry2_id)
+  );
+  const sections: { key: string; title: string; list: Match[] }[] = [];
+  for (let r = 1; r <= rounds; r++) {
+    const list = visible.filter((m) => (m.bracket ?? "winners") === "winners" && m.round === r);
+    if (list.length) {
+      sections.push({
+        key: `w${r}`,
+        title: (isDouble ? "Winners bracket: " : "") + roundName(r, rounds),
+        list,
+      });
+    }
+  }
+  const lbRounds = Array.from(
+    new Set(visible.filter((m) => m.bracket === "losers").map((m) => m.round))
+  ).sort((a, b) => a - b);
+  lbRounds.forEach((r, i) => {
+    sections.push({
+      key: `l${r}`,
+      title: `Losers bracket: Round ${i + 1}`,
+      list: visible.filter((m) => m.bracket === "losers" && m.round === r),
+    });
+  });
+  const gf = visible.find((m) => m.bracket === "grand" && m.round === 1);
+  if (gf) sections.push({ key: "g1", title: "Grand final", list: [gf] });
+  const reset = visible.find(
+    (m) => m.bracket === "grand" && m.round === 2 && m.entry1_id && m.entry2_id
+  );
+  if (reset) sections.push({ key: "g2", title: "Grand final reset", list: [reset] });
+
+  function label(id: string | null, m: Match) {
     if (id) return entries.find((x) => x.id === id)?.name ?? "?";
-    return round === 1 ? "BYE" : "To be decided";
+    return m.status === "completed" ? "BYE" : "To be decided";
   }
 
   function current(m: Match) {
@@ -173,10 +217,6 @@ export default function AdminBracketPage() {
   async function startBracket() {
     if (!ev) return;
     setMessage("");
-    if (ev.format === "double") {
-      setMessage("Double elimination is not available yet.");
-      return;
-    }
     const evRegs = regs.filter((r) => r.event_id === ev.id);
     let list: Item[];
 
@@ -199,6 +239,10 @@ export default function AdminBracketPage() {
 
     if (list.length < 2) {
       setMessage("You need at least 2 teams or players.");
+      return;
+    }
+    if (isDouble && list.length < 3) {
+      setMessage("Double elimination needs at least 3 teams or players.");
       return;
     }
     if (hasBracket && !confirm("This deletes the current bracket and all scores. Continue?")) return;
@@ -239,28 +283,52 @@ export default function AdminBracketPage() {
     const finalN = Math.max(1, Number(finalLegs) || 3);
 
     const rows: NewMatch[] = [];
-    for (let r = 1; r <= total; r++) {
-      const count = size / 2 ** r;
-      for (let m = 1; m <= count; m++) {
+    if (isDouble) {
+      for (const s of layout(size)) {
         let e1: string | null = null;
         let e2: string | null = null;
-        if (r === 1) {
-          const s1 = positions[(m - 1) * 2];
-          const s2 = positions[(m - 1) * 2 + 1];
+        if (s.bracket === "winners" && s.round === 1) {
+          const s1 = positions[(s.match_no - 1) * 2];
+          const s2 = positions[(s.match_no - 1) * 2 + 1];
           e1 = s1 <= n ? bySeed[s1] : null;
           e2 = s2 <= n ? bySeed[s2] : null;
         }
         rows.push({
           event_id: ev.id,
-          bracket: "winners",
-          round: r,
-          match_no: m,
+          bracket: s.bracket,
+          round: s.round,
+          match_no: s.match_no,
           entry1_id: e1,
           entry2_id: e2,
-          game_type: Number(gameType),
-          legs_to_win: r === total ? finalN : legsN,
+          game_type: s.bracket === "losers" ? 701 : Number(gameType),
+          legs_to_win: s.bracket === "grand" ? finalN : s.bracket === "losers" ? 1 : legsN,
           status: "scheduled",
         });
+      }
+    } else {
+      for (let r = 1; r <= total; r++) {
+        const count = size / 2 ** r;
+        for (let m = 1; m <= count; m++) {
+          let e1: string | null = null;
+          let e2: string | null = null;
+          if (r === 1) {
+            const s1 = positions[(m - 1) * 2];
+            const s2 = positions[(m - 1) * 2 + 1];
+            e1 = s1 <= n ? bySeed[s1] : null;
+            e2 = s2 <= n ? bySeed[s2] : null;
+          }
+          rows.push({
+            event_id: ev.id,
+            bracket: "winners",
+            round: r,
+            match_no: m,
+            entry1_id: e1,
+            entry2_id: e2,
+            game_type: Number(gameType),
+            legs_to_win: r === total ? finalN : legsN,
+            status: "scheduled",
+          });
+        }
       }
     }
 
@@ -270,30 +338,57 @@ export default function AdminBracketPage() {
       return;
     }
     const made = inserted as Match[];
-    const find = (r: number, m: number) => made.find((x) => x.round === r && x.match_no === m);
 
-    for (const mt of made) {
-      if (mt.round < total) {
-        const next = find(mt.round + 1, Math.ceil(mt.match_no / 2));
-        if (next) {
-          await supabase.from("matches").update({ next_match_id: next.id }).eq("id", mt.id);
+    if (isDouble) {
+      // link the matches, then let byes move forward automatically
+      link(made, size);
+      settle(made);
+      const results = await Promise.all(
+        made.map((mt) =>
+          supabase
+            .from("matches")
+            .update({
+              next_match_id: mt.next_match_id,
+              loser_next_match_id: mt.loser_next_match_id,
+              entry1_id: mt.entry1_id,
+              entry2_id: mt.entry2_id,
+              status: mt.status,
+              winner_id: mt.winner_id,
+            })
+            .eq("id", mt.id)
+        )
+      );
+      const failed = results.find((x) => x.error);
+      if (failed?.error) {
+        setMessage(failed.error.message);
+        return;
+      }
+    } else {
+      const find = (r: number, m: number) => made.find((x) => x.round === r && x.match_no === m);
+
+      for (const mt of made) {
+        if (mt.round < total) {
+          const next = find(mt.round + 1, Math.ceil(mt.match_no / 2));
+          if (next) {
+            await supabase.from("matches").update({ next_match_id: next.id }).eq("id", mt.id);
+          }
         }
       }
-    }
 
-    // Byes: the only entry moves straight to round 2
-    for (const mt of made) {
-      if (mt.round !== 1) continue;
-      const only =
-        mt.entry1_id && !mt.entry2_id ? mt.entry1_id : !mt.entry1_id && mt.entry2_id ? mt.entry2_id : null;
-      if (!only) continue;
-      await supabase.from("matches").update({ status: "completed", winner_id: only }).eq("id", mt.id);
-      const next = find(2, Math.ceil(mt.match_no / 2));
-      if (next) {
-        await supabase
-          .from("matches")
-          .update(mt.match_no % 2 === 1 ? { entry1_id: only } : { entry2_id: only })
-          .eq("id", next.id);
+      // Byes: the only entry moves straight to round 2
+      for (const mt of made) {
+        if (mt.round !== 1) continue;
+        const only =
+          mt.entry1_id && !mt.entry2_id ? mt.entry1_id : !mt.entry1_id && mt.entry2_id ? mt.entry2_id : null;
+        if (!only) continue;
+        await supabase.from("matches").update({ status: "completed", winner_id: only }).eq("id", mt.id);
+        const next = find(2, Math.ceil(mt.match_no / 2));
+        if (next) {
+          await supabase
+            .from("matches")
+            .update(mt.match_no % 2 === 1 ? { entry1_id: only } : { entry2_id: only })
+            .eq("id", next.id);
+        }
       }
     }
 
@@ -318,20 +413,72 @@ export default function AdminBracketPage() {
       setMessage(`The winner must reach exactly ${need} legs and the other side fewer.`);
       return;
     }
-    const next = matches.find((x) => x.id === m.next_match_id);
-    if (m.status === "completed" && next?.status === "completed") {
-      setMessage("The next match was already played, so this score can't be changed.");
-      return;
-    }
+    if (!m.entry1_id || !m.entry2_id) return;
     const winner = a > b ? m.entry1_id : m.entry2_id;
-    const { error } = await supabase
-      .from("matches")
-      .update({ score1: a, score2: b, winner_id: winner, status: "completed" })
-      .eq("id", m.id);
-    if (error) {
-      setMessage(error.message);
+    const loser = a > b ? m.entry2_id : m.entry1_id;
+
+    const evAll = matches.filter((x) => x.event_id === m.event_id);
+    const winnerChanged = m.status === "completed" && m.winner_id !== winner;
+    if (winnerChanged) {
+      const blocked = evAll.some(
+        (x) =>
+          x.status === "completed" &&
+          (x.id === m.next_match_id ||
+            x.id === m.loser_next_match_id ||
+            (m.bracket === "grand" && m.round === 1 && x.bracket === "grand" && x.round === 2))
+      );
+      if (blocked) {
+        setMessage("The next match was already played, so the winner of this match can't be changed.");
+        return;
+      }
+    }
+
+    // work out every change in memory first, then save only what changed
+    const ms = evAll.map((x) => ({ ...x }));
+    const cm = ms.find((x) => x.id === m.id);
+    if (!cm) return;
+    cm.score1 = a;
+    cm.score2 = b;
+    cm.winner_id = winner;
+    cm.status = "completed";
+    applyResult(ms, m.id, winner, loser);
+
+    const updates = ms
+      .map((x) => {
+        const old = evAll.find((o) => o.id === x.id);
+        if (!old) return null;
+        const changed =
+          old.entry1_id !== x.entry1_id ||
+          old.entry2_id !== x.entry2_id ||
+          old.status !== x.status ||
+          old.winner_id !== x.winner_id ||
+          old.score1 !== x.score1 ||
+          old.score2 !== x.score2;
+        return changed ? x : null;
+      })
+      .filter((x): x is Match => x !== null);
+
+    const results = await Promise.all(
+      updates.map((x) =>
+        supabase
+          .from("matches")
+          .update({
+            entry1_id: x.entry1_id,
+            entry2_id: x.entry2_id,
+            status: x.status,
+            winner_id: x.winner_id,
+            score1: x.score1,
+            score2: x.score2,
+          })
+          .eq("id", x.id)
+      )
+    );
+    const failed = results.find((x) => x.error);
+    if (failed?.error) {
+      setMessage(failed.error.message);
       return;
     }
+
     if (m.status === "completed") {
       const { data: { user } } = await supabase.auth.getUser();
       await supabase.from("score_edits").insert({
@@ -342,12 +489,6 @@ export default function AdminBracketPage() {
         new_score1: a,
         new_score2: b,
       });
-    }
-    if (m.next_match_id) {
-      await supabase
-        .from("matches")
-        .update(m.match_no % 2 === 1 ? { entry1_id: winner } : { entry2_id: winner })
-        .eq("id", m.next_match_id);
     }
     load();
   }
@@ -385,50 +526,44 @@ export default function AdminBracketPage() {
           <section className="rounded-lg border border-gray-600 p-4">
             <p className="font-semibold">{ev.name}</p>
             <p className="text-sm text-gray-400">
-              {ev.format === "single" ? "Single" : "Double"} elimination ·{" "}
+              {isDouble ? "Double" : "Single"} elimination ·{" "}
               {hasBracket ? `${evMatches.length} matches` : "bracket not started"}
             </p>
-            {ev.format === "double" ? (
-              <p className="mt-2 text-sm text-yellow-300">
-                Double elimination is not available yet. Use single elimination for now.
-              </p>
-            ) : (
-              <div className="mt-3 flex flex-col gap-3">
-                <div className="grid grid-cols-3 gap-2 text-sm">
-                  <label className="flex flex-col gap-1">
-                    Game
-                    <select className={small} value={gameType}
-                      onChange={(e) => setGameType(e.target.value)}>
-                      <option value="501">501</option>
-                      <option value="301">301</option>
-                    </select>
-                  </label>
-                  <label className="flex flex-col gap-1">
-                    Legs to win
-                    <input className={small} type="number" min="1" value={legs}
-                      onChange={(e) => setLegs(e.target.value)} />
-                  </label>
-                  <label className="flex flex-col gap-1">
-                    Final legs
-                    <input className={small} type="number" min="1" value={finalLegs}
-                      onChange={(e) => setFinalLegs(e.target.value)} />
-                  </label>
-                </div>
-                <button className={button} onClick={startBracket}>
-                  {hasBracket ? "Reset and rebuild bracket" : "Start tournament"}
-                </button>
+            <div className="mt-3 flex flex-col gap-3">
+              <div className="grid grid-cols-3 gap-2 text-sm">
+                <label className="flex flex-col gap-1">
+                  Game
+                  <select className={small} value={gameType}
+                    onChange={(e) => setGameType(e.target.value)}>
+                    <option value="501">501</option>
+                    <option value="301">301</option>
+                  </select>
+                </label>
+                <label className="flex flex-col gap-1">
+                  Legs to win
+                  <input className={small} type="number" min="1" value={legs}
+                    onChange={(e) => setLegs(e.target.value)} />
+                </label>
+                <label className="flex flex-col gap-1">
+                  {isDouble ? "Grand final legs" : "Final legs"}
+                  <input className={small} type="number" min="1" value={finalLegs}
+                    onChange={(e) => setFinalLegs(e.target.value)} />
+                </label>
               </div>
-            )}
+              <button className={button} onClick={startBracket}>
+                {hasBracket ? "Reset and rebuild bracket" : "Start tournament"}
+              </button>
+            </div>
             {champion && (
               <p className="mt-3 font-semibold text-green-400">Champion: {champion}</p>
             )}
           </section>
 
-          {Array.from({ length: rounds }, (_, i) => i + 1).map((r) => (
-            <section key={r}>
-              <h2 className="mb-3 text-lg font-semibold">{roundName(r, rounds)}</h2>
+          {sections.map((sec) => (
+            <section key={sec.key}>
+              <h2 className="mb-3 text-lg font-semibold">{sec.title}</h2>
               <div className="flex flex-col gap-3">
-                {evMatches.filter((m) => m.round === r).map((m) => {
+                {sec.list.map((m) => {
                   const played = m.status === "completed" && !!m.entry1_id && !!m.entry2_id;
                   const cur = current(m);
                   return (
@@ -437,10 +572,10 @@ export default function AdminBracketPage() {
                         Match {m.match_no} · {m.game_type} · first to {m.legs_to_win}
                       </p>
                       <p className={m.winner_id && m.winner_id === m.entry1_id ? "font-semibold text-green-400" : ""}>
-                        {label(m.entry1_id, m.round)}{played ? ` (${m.score1})` : ""}
+                        {label(m.entry1_id, m)}{played ? ` (${m.score1})` : ""}
                       </p>
                       <p className={m.winner_id && m.winner_id === m.entry2_id ? "font-semibold text-green-400" : ""}>
-                        {label(m.entry2_id, m.round)}{played ? ` (${m.score2})` : ""}
+                        {label(m.entry2_id, m)}{played ? ` (${m.score2})` : ""}
                       </p>
                       {m.entry1_id && m.entry2_id && (
                         <div className="mt-2 flex items-center gap-2">
@@ -466,3 +601,4 @@ export default function AdminBracketPage() {
     </main>
   );
 }
+

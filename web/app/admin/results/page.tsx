@@ -1,19 +1,25 @@
-"use client";
+﻿"use client";
 
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
+import { doublePlacements } from "@/lib/doubleElim";
 
 type Tournament = { id: string; name: string };
 type EventRow = { id: string; tournament_id: string; name: string; format: string };
 type Entry = { id: string; name: string };
 type Match = {
+  id: string;
+  bracket: string;
   round: number;
+  match_no: number;
   entry1_id: string | null;
   entry2_id: string | null;
   winner_id: string | null;
   status: string;
+  next_match_id: string | null;
+  loser_next_match_id: string | null;
 };
 type Saved = { entry_id: string; placement: number; points: number };
 type Row = { entryId: string; placement: number; label: string; points: number };
@@ -48,6 +54,26 @@ function compute(matches: Match[]): Row[] | null {
   return rows.sort((a, b) => a.placement - b.placement);
 }
 
+function computeDouble(matches: Match[]): Row[] | null {
+  const list = doublePlacements(matches);
+  if (!list) return null;
+  return list.map((p) => ({
+    entryId: p.entryId,
+    placement: p.placement,
+    label: p.label,
+    points:
+      p.placement === 1
+        ? POINTS.champion
+        : p.placement === 2
+        ? POINTS.runnerUp
+        : p.placement <= 4
+        ? POINTS.semifinal
+        : p.placement <= 8
+        ? POINTS.quarterfinal
+        : 0,
+  }));
+}
+
 export default function AdminResultsPage() {
   const router = useRouter();
   const [ready, setReady] = useState(false);
@@ -71,7 +97,9 @@ export default function AdminResultsPage() {
       supabase.from("entries").select("id, name").eq("event_id", id),
       supabase
         .from("matches")
-        .select("round, entry1_id, entry2_id, winner_id, status")
+        .select(
+          "id, bracket, round, match_no, entry1_id, entry2_id, winner_id, status, next_match_id, loser_next_match_id"
+        )
         .eq("event_id", id),
       supabase
         .from("event_results")
@@ -116,8 +144,9 @@ export default function AdminResultsPage() {
   }, [eventId, loadEvent]);
 
   const event = events.find((x) => x.id === eventId);
+  const isDouble = event?.format === "double";
   const names = new Map(entries.map((e) => [e.id, e.name]));
-  const preview = event && event.format === "single" ? compute(matches) : null;
+  const preview = event ? (isDouble ? computeDouble(matches) : compute(matches)) : null;
   const upToDate =
     !!preview &&
     saved.length === preview.length &&
@@ -181,15 +210,11 @@ export default function AdminResultsPage() {
         </select>
       </div>
 
-      {event && event.format !== "single" && (
-        <p className="text-sm text-yellow-300">
-          Points for double elimination are not available yet.
-        </p>
-      )}
-
-      {event && event.format === "single" && !preview && (
+      {event && !preview && (
         <p className="text-sm text-gray-400">
-          The final has not been played yet, so there are no placements to save.
+          {isDouble
+            ? "The Grand final has not been decided yet, so there are no placements to save."
+            : "The final has not been played yet, so there are no placements to save."}
         </p>
       )}
 
@@ -197,7 +222,9 @@ export default function AdminResultsPage() {
         <section className="flex flex-col gap-3">
           <h2 className="text-lg font-semibold">Placements from the bracket</h2>
           <p className="text-sm text-gray-400">
-            Champion 15, runner-up 10, semifinal losers 5, quarterfinal losers 3, everyone else 0.
+            {isDouble
+              ? "Champion 15, runner-up 10, third and fourth place 5, fifth to eighth place 3, everyone else 0."
+              : "Champion 15, runner-up 10, semifinal losers 5, quarterfinal losers 3, everyone else 0."}{" "}
             Every member of a team gets the full points.
           </p>
           <div className="overflow-x-auto">

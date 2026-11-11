@@ -1,14 +1,15 @@
-"use client";
+﻿"use client";
 
 import { useCallback, useEffect, useState } from "react";
-import Link from "next/link";
 import { supabase } from "@/lib/supabase";
+import { championOf } from "@/lib/doubleElim";
 
 type Tournament = { id: string; name: string; event_date: string; venue: string | null };
 type EventRow = { id: string; tournament_id: string; name: string; format: string };
 type Entry = { id: string; name: string };
 type Match = {
   id: string;
+  bracket: string;
   round: number;
   match_no: number;
   entry1_id: string | null;
@@ -19,6 +20,8 @@ type Match = {
   status: string;
   game_type: number;
   legs_to_win: number;
+  next_match_id: string | null;
+  loser_next_match_id: string | null;
 };
 
 const input = "w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-black";
@@ -99,18 +102,59 @@ export default function PublicBracketPage() {
 
   const tournament = tournaments.find((t) => t.id === tournamentId);
   const event = events.find((x) => x.id === eventId);
+  const isDouble = event?.format === "double";
   const names = new Map(entries.map((e) => [e.id, e.name]));
   const sorted = [...matches].sort((a, b) => a.round - b.round || a.match_no - b.match_no);
-  const rounds = sorted.reduce((mx, m) => Math.max(mx, m.round), 0);
-  const finalMatch = sorted.find((m) => m.round === rounds);
-  const champion =
-    finalMatch?.status === "completed" && finalMatch.winner_id
-      ? names.get(finalMatch.winner_id)
-      : null;
+  const winnersMatches = sorted.filter((m) => (m.bracket ?? "winners") === "winners");
+  const rounds = winnersMatches.reduce((mx, m) => Math.max(mx, m.round), 0);
 
-  function slot(id: string | null, round: number) {
+  let champion: string | null | undefined = null;
+  if (isDouble) {
+    const id = championOf(sorted);
+    champion = id ? names.get(id) : null;
+  } else {
+    const finalMatch = winnersMatches.find((m) => m.round === rounds);
+    champion =
+      finalMatch?.status === "completed" && finalMatch.winner_id
+        ? names.get(finalMatch.winner_id)
+        : null;
+  }
+
+  // matches that nobody can ever play (because of byes) are hidden
+  const visible = sorted.filter(
+    (m) => !(m.status === "completed" && !m.entry1_id && !m.entry2_id)
+  );
+  const sections: { key: string; title: string; list: Match[] }[] = [];
+  for (let r = 1; r <= rounds; r++) {
+    const list = visible.filter((m) => (m.bracket ?? "winners") === "winners" && m.round === r);
+    if (list.length) {
+      sections.push({
+        key: `w${r}`,
+        title: (isDouble ? "Winners bracket: " : "") + roundName(r, rounds),
+        list,
+      });
+    }
+  }
+  const lbRounds = Array.from(
+    new Set(visible.filter((m) => m.bracket === "losers").map((m) => m.round))
+  ).sort((a, b) => a - b);
+  lbRounds.forEach((r, i) => {
+    sections.push({
+      key: `l${r}`,
+      title: `Losers bracket: Round ${i + 1}`,
+      list: visible.filter((m) => m.bracket === "losers" && m.round === r),
+    });
+  });
+  const gf = visible.find((m) => m.bracket === "grand" && m.round === 1);
+  if (gf) sections.push({ key: "g1", title: "Grand final", list: [gf] });
+  const reset = visible.find(
+    (m) => m.bracket === "grand" && m.round === 2 && m.entry1_id && m.entry2_id
+  );
+  if (reset) sections.push({ key: "g2", title: "Grand final reset", list: [reset] });
+
+  function slot(id: string | null, m: Match) {
     if (id) return names.get(id) ?? "?";
-    return round === 1 ? "BYE" : "To be decided";
+    return m.status === "completed" ? "BYE" : "To be decided";
   }
 
   return (
@@ -171,11 +215,11 @@ export default function PublicBracketPage() {
         </div>
       )}
 
-      {Array.from({ length: rounds }, (_, i) => i + 1).map((r) => (
-        <section key={r}>
-          <h2 className="mb-3 text-lg font-semibold">{roundName(r, rounds)}</h2>
+      {sections.map((sec) => (
+        <section key={sec.key}>
+          <h2 className="mb-3 text-lg font-semibold">{sec.title}</h2>
           <div className="flex flex-col gap-3">
-            {sorted.filter((m) => m.round === r).map((m) => {
+            {sec.list.map((m) => {
               const ready = !!m.entry1_id && !!m.entry2_id;
               const done = m.status === "completed";
               const label = ready
@@ -185,7 +229,7 @@ export default function PublicBracketPage() {
                 <div className={`flex justify-between gap-2 ${
                   id && m.winner_id === id ? "font-semibold text-green-400" : ""
                 }`}>
-                  <span>{slot(id, m.round)}</span>
+                  <span>{slot(id, m)}</span>
                   {ready && done && <span>{score}</span>}
                 </div>
               );
