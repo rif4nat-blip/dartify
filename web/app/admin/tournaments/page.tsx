@@ -150,7 +150,6 @@ export default function AdminTournamentsPage() {
     <main className="mx-auto flex max-w-2xl flex-col gap-8 p-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">Manage tournaments</h1>
-        <Link href="/dashboard" className="underline">Back to dashboard</Link>
       </div>
 
       {error && <p className="text-sm text-red-500">{error}</p>}

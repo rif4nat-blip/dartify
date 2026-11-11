@@ -117,7 +117,6 @@ export default function PublicBracketPage() {
     <main className="mx-auto flex max-w-2xl flex-col gap-6 p-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">Live brackets</h1>
-        <Link href="/dashboard" className="underline">Dashboard</Link>
       </div>
 
       {!loaded && <p className="text-sm text-gray-500">Loading...</p>}

@@ -7,6 +7,35 @@ import { supabase } from "@/lib/supabase";
 
 type Profile = { full_name: string; role: string };
 
+const playerLinks = [
+  ["Browse tournaments", "Find an event and join.", "/tournaments"],
+  ["Live brackets", "Follow matches in real time.", "/bracket"],
+  ["Leaderboard", "See the points ranking.", "/leaderboard"],
+];
+
+const adminLinks = [
+  ["Manage tournaments", "Create tournaments and events.", "/admin/tournaments"],
+  ["Registrations and draw", "Walk-ins, payments and the scramble.", "/admin/registrations"],
+  ["Bracket and scores", "Start the bracket and enter results.", "/admin/bracket"],
+  ["Event points", "Save placements and points.", "/admin/results"],
+  ["Printable player list", "Print, PDF or Word.", "/admin/print"],
+];
+
+function CardLink({ title, desc, href }: { title: string; desc: string; href: string }) {
+  return (
+    <div className="flex flex-col gap-2 rounded-xl border border-white/10 bg-white/5 p-5">
+      <div className="text-lg font-semibold">{title}</div>
+      <p className="text-sm text-gray-400">{desc}</p>
+      <Link
+        href={href}
+        className="mt-2 w-fit rounded border border-green-500 px-4 py-2 text-sm text-green-400 hover:bg-green-500/10"
+      >
+        Open
+      </Link>
+    </div>
+  );
+}
+
 export default function DashboardPage() {
   const router = useRouter();
   const [profile, setProfile] = useState<Profile | null>(null);
@@ -28,50 +57,30 @@ export default function DashboardPage() {
     load();
   }, [router]);
 
-  async function logout() {
-    await supabase.auth.signOut();
-    router.replace("/login");
-  }
-
-  if (!profile) return <main className="p-6">Loading...</main>;
+  if (!profile) return <main className="mx-auto max-w-6xl px-5 py-10">Loading...</main>;
 
   return (
-    <main className="mx-auto max-w-md p-6">
-      <h1 className="text-2xl font-bold">Welcome, {profile.full_name}</h1>
-      <p className="mt-1 text-sm text-gray-500">Role: {profile.role}</p>
-      <div className="mt-4 flex flex-col gap-2">
-        <Link href="/tournaments" className="underline">
-          Browse tournaments
-        </Link>
-        <Link href="/bracket" className="underline">
-          Live brackets
-        </Link>
-        <Link href="/leaderboard" className="underline">
-          Leaderboard
-        </Link>
-        {profile.role === "admin" && (
-          <>
-            <Link href="/admin/tournaments" className="underline">
-              Manage tournaments
-            </Link>
-            <Link href="/admin/registrations" className="underline">
-              Registrations and draw
-            </Link>
-            <Link href="/admin/bracket" className="underline">
-              Bracket and scores
-            </Link>
-            <Link href="/admin/results" className="underline">
-              Event points
-            </Link>
-            <Link href="/admin/print" className="underline">
-              Printable player list
-            </Link>
-          </>
-        )}
+    <main className="mx-auto max-w-6xl px-5 py-8 md:py-10">
+      <h1 className="text-2xl font-bold md:text-3xl">Welcome, {profile.full_name}</h1>
+      <p className="mt-1 text-sm text-gray-400">Role: {profile.role}</p>
+
+      <h2 className="mb-3 mt-8 text-xl font-semibold">Player</h2>
+      <div className="grid gap-4 md:grid-cols-3">
+        {playerLinks.map(([t, d, h]) => (
+          <CardLink key={h} title={t} desc={d} href={h} />
+        ))}
       </div>
-      <button onClick={logout} className="mt-6 rounded-lg border px-4 py-2">
-        Log out
-      </button>
+
+      {profile.role === "admin" && (
+        <>
+          <h2 className="mb-3 mt-10 text-xl font-semibold">Admin</h2>
+          <div className="grid gap-4 md:grid-cols-3">
+            {adminLinks.map(([t, d, h]) => (
+              <CardLink key={h} title={t} desc={d} href={h} />
+            ))}
+          </div>
+        </>
+      )}
     </main>
   );
 }

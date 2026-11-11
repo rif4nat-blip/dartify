@@ -93,7 +93,6 @@ export default function LeaderboardPage() {
     <main className="mx-auto flex max-w-2xl flex-col gap-8 p-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">Leaderboard</h1>
-        <Link href="/dashboard" className="underline">Dashboard</Link>
       </div>
 
       <section className="flex flex-col gap-3">
