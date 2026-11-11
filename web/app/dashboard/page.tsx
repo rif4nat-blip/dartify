@@ -64,12 +64,16 @@ export default function DashboardPage() {
       <h1 className="text-2xl font-bold md:text-3xl">Welcome, {profile.full_name}</h1>
       <p className="mt-1 text-sm text-gray-400">Role: {profile.role}</p>
 
-      <h2 className="mb-3 mt-8 text-xl font-semibold">Player</h2>
-      <div className="grid gap-4 md:grid-cols-3">
-        {playerLinks.map(([t, d, h]) => (
-          <CardLink key={h} title={t} desc={d} href={h} />
-        ))}
-      </div>
+           {profile.role !== "admin" && (
+        <>
+          <h2 className="mb-3 mt-8 text-xl font-semibold">Player</h2>
+          <div className="grid gap-4 md:grid-cols-3">
+            {playerLinks.map(([t, d, h]) => (
+              <CardLink key={h} title={t} desc={d} href={h} />
+            ))}
+          </div>
+        </>
+      )}
 
       {profile.role === "admin" && (
         <>
