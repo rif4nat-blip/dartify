@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -11,6 +11,7 @@ type Tournament = {
   event_date: string;
   venue: string | null;
   registration_fee: number;
+  status: string;
 };
 
 type EventRow = {
@@ -133,6 +134,22 @@ export default function AdminTournamentsPage() {
     load();
   }
 
+  async function setStatus(id: string, status: string) {
+    setError("");
+    if (
+      status === "completed" &&
+      !confirm("Mark this tournament as completed? It moves to Past tournaments and registration closes.")
+    ) {
+      return;
+    }
+    const { error } = await supabase.from("tournaments").update({ status }).eq("id", id);
+    if (error) {
+      setError(error.message);
+      return;
+    }
+    load();
+  }
+
   async function deleteTournament(id: string) {
     if (!confirm("Delete this tournament and all its events?")) return;
     await supabase.from("tournaments").delete().eq("id", id);
@@ -175,7 +192,7 @@ export default function AdminTournamentsPage() {
           <select className={input} value={eventTournament}
             onChange={(e) => setEventTournament(e.target.value)}>
             <option value="">Select tournament</option>
-            {tournaments.map((t) => (
+            {tournaments.filter((t) => t.status !== "completed").map((t) => (
               <option key={t.id} value={t.id}>{t.name}</option>
             ))}
           </select>
@@ -204,13 +221,31 @@ export default function AdminTournamentsPage() {
             <div key={t.id} className="rounded-lg border border-gray-600 p-4">
               <div className="flex items-start justify-between gap-2">
                 <div>
-                  <p className="font-semibold">{t.name}</p>
+                  <p className="font-semibold">
+                    {t.name}{" "}
+                    <span className={`ml-1 rounded px-2 py-0.5 text-xs font-normal ${
+                      t.status === "completed"
+                        ? "bg-gray-700 text-gray-300"
+                        : "bg-green-900 text-green-300"
+                    }`}>
+                      {t.status === "completed" ? "Completed" : "Active"}
+                    </span>
+                  </p>
                   <p className="text-sm text-gray-400">
                     {t.event_date} · {t.venue || "No venue"} · PHP {t.registration_fee}
                   </p>
                 </div>
-                <button onClick={() => deleteTournament(t.id)}
-                  className="text-sm text-red-400 underline">Delete</button>
+                <div className="flex flex-col items-end gap-1 text-sm">
+                  {t.status === "completed" ? (
+                    <button onClick={() => setStatus(t.id, "open")}
+                      className="text-green-400 underline">Reopen</button>
+                  ) : (
+                    <button onClick={() => setStatus(t.id, "completed")}
+                      className="text-green-400 underline">Mark as completed</button>
+                  )}
+                  <button onClick={() => deleteTournament(t.id)}
+                    className="text-red-400 underline">Delete</button>
+                </div>
               </div>
               <ul className="mt-3 flex flex-col gap-1 text-sm">
                 {events.filter((ev) => ev.tournament_id === t.id).map((ev) => (

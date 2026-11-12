@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
@@ -10,6 +10,7 @@ type Tournament = {
   event_date: string;
   venue: string | null;
   registration_fee: number;
+  status: string;
 };
 type EventRow = {
   id: string;
@@ -32,6 +33,8 @@ type Reg = {
   payment_status: string;
 };
 type Count = { event_id: string; players: number; teams: number };
+type Podium = { event_id: string; entry_id: string; placement: number };
+type EntryName = { id: string; name: string };
 
 const input = "w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-black";
 const button = "rounded-lg bg-green-600 px-4 py-2 font-semibold text-white";
@@ -45,6 +48,10 @@ function howItWorks(ev: EventRow) {
     : "Register alone.";
 }
 
+function placeLabel(n: number) {
+  return n === 1 ? "1st" : n === 2 ? "2nd" : n === 3 ? "3rd" : `${n}th`;
+}
+
 export default function TournamentsPage() {
   const [userId, setUserId] = useState<string | null>(null);
   const [myName, setMyName] = useState("");
@@ -53,6 +60,9 @@ export default function TournamentsPage() {
   const [teams, setTeams] = useState<Team[]>([]);
   const [regs, setRegs] = useState<Reg[]>([]);
   const [counts, setCounts] = useState<Count[]>([]);
+  const [podium, setPodium] = useState<Podium[]>([]);
+  const [entryNames, setEntryNames] = useState<EntryName[]>([]);
+  const [showPast, setShowPast] = useState(false);
 
   const [openEvent, setOpenEvent] = useState<string | null>(null);
   const [teamName, setTeamName] = useState("");
@@ -72,18 +82,22 @@ export default function TournamentsPage() {
         .single();
       setMyName(p?.full_name ?? "");
     }
-    const [t, e, tm, r, c] = await Promise.all([
+    const [t, e, tm, r, c, pd, en] = await Promise.all([
       supabase.from("tournaments").select("*").order("event_date"),
       supabase.from("events").select("*"),
       supabase.from("teams").select("*"),
       supabase.from("registrations").select("*"),
       supabase.from("event_counts").select("*"),
+      supabase.from("event_results").select("event_id, entry_id, placement").lte("placement", 3),
+      supabase.from("entries").select("id, name"),
     ]);
     setTournaments(t.data ?? []);
     setEvents(e.data ?? []);
     setTeams(tm.data ?? []);
     setRegs(r.data ?? []);
     setCounts((c.data ?? []) as Count[]);
+    setPodium((pd.data ?? []) as Podium[]);
+    setEntryNames((en.data ?? []) as EntryName[]);
   }, []);
 
   useEffect(() => {
@@ -155,6 +169,12 @@ export default function TournamentsPage() {
     load();
   }
 
+  const active = tournaments.filter((t) => t.status !== "completed");
+  const past = tournaments
+    .filter((t) => t.status === "completed")
+    .sort((a, b) => b.event_date.localeCompare(a.event_date));
+  const entryName = new Map(entryNames.map((e) => [e.id, e.name]));
+
   return (
     <main className="mx-auto flex max-w-2xl flex-col gap-6 p-6">
       <div className="flex items-center justify-between">
@@ -166,8 +186,11 @@ export default function TournamentsPage() {
 
       {message && <p className="text-sm text-yellow-300">{message}</p>}
       {tournaments.length === 0 && <p className="text-sm text-gray-500">No tournaments yet.</p>}
+      {tournaments.length > 0 && active.length === 0 && (
+        <p className="text-sm text-gray-500">No upcoming tournaments right now.</p>
+      )}
 
-      {tournaments.map((t) => (
+      {active.map((t) => (
         <section key={t.id} className="rounded-lg border border-gray-600 p-4">
           <p className="text-lg font-semibold">{t.name}</p>
           <p className="text-sm text-gray-400">
@@ -267,6 +290,59 @@ export default function TournamentsPage() {
           </div>
         </section>
       ))}
+
+      {past.length > 0 && (
+        <section className="flex flex-col gap-4">
+          <button onClick={() => setShowPast(!showPast)}
+            className="text-left text-lg font-semibold underline">
+            Past tournaments ({past.length}) {showPast ? "▲" : "▼"}
+          </button>
+
+          {showPast &&
+            past.map((t) => (
+              <div key={t.id} className="rounded-lg border border-gray-700 p-4">
+                <p className="text-lg font-semibold">{t.name}</p>
+                <p className="text-sm text-gray-400">
+                  {t.event_date} · {t.venue || "Venue not listed"}
+                </p>
+                <div className="mt-3 flex flex-col gap-3">
+                  {events
+                    .filter((ev) => ev.tournament_id === t.id)
+                    .map((ev) => {
+                      const top = podium
+                        .filter((p) => p.event_id === ev.id)
+                        .sort((a, b) => a.placement - b.placement);
+                      return (
+                        <div key={ev.id} className="rounded-lg border border-gray-800 p-3 text-sm">
+                          <p className="font-medium">
+                            {ev.name}{" "}
+                            <span className="font-normal text-gray-400">
+                              · {ev.format === "single" ? "Single" : "Double"} elimination
+                            </span>
+                          </p>
+                          {top.length === 0 ? (
+                            <p className="text-gray-500">No results recorded.</p>
+                          ) : (
+                            <ul className="mt-1">
+                              {top.map((p) => (
+                                <li key={p.entry_id}>
+                                  {placeLabel(p.placement)} · {entryName.get(p.entry_id) ?? "?"}
+                                </li>
+                              ))}
+                            </ul>
+                          )}
+                          <Link href={`/bracket?event=${ev.id}`}
+                            className="mt-1 inline-block text-green-400 underline">
+                            View final bracket
+                          </Link>
+                        </div>
+                      );
+                    })}
+                </div>
+              </div>
+            ))}
+        </section>
+      )}
     </main>
   );
 }
