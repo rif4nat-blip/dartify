@@ -1,10 +1,10 @@
-﻿"use client";
+"use client";
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 
-const input = "w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-black";
+const input = "field";
 
 type ResultRow = {
   placement: number;
@@ -107,8 +107,8 @@ export default function ProfilePage() {
   const totalPoints = history.reduce((sum, h) => sum + (h.points ?? 0), 0);
 
   return (
-    <main className="mx-auto max-w-2xl space-y-8 p-6">
-      <h1 className="text-2xl font-bold">My profile</h1>
+    <main className="mx-auto max-w-3xl space-y-8 p-6">
+      <h1 className="text-3xl font-bold tracking-tight">My profile</h1>
 
       <div className="grid grid-cols-3 gap-3 text-center">
         <div className="rounded-xl border border-white/10 p-4">
@@ -136,7 +136,7 @@ export default function ProfilePage() {
           onChange={(e) => setPhone(e.target.value)} />
         {msg && <p className="text-sm">{msg}</p>}
         <button disabled={saving}
-          className="rounded-lg bg-green-600 py-2 font-semibold text-white disabled:opacity-50">
+          className="btn w-full">
           {saving ? "Saving..." : "Save changes"}
         </button>
       </form>

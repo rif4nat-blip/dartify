@@ -5,7 +5,7 @@ import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import PasswordInput from "../components/PasswordInput";
 
-const input = "w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-black";
+const input = "field";
 
 export default function ResetPasswordPage() {
   const [ready, setReady] = useState(false);
@@ -67,7 +67,7 @@ export default function ResetPasswordPage() {
             value={confirm} onChange={setConfirm} required autoComplete="new-password" />
           {error && <p className="text-sm text-red-500">{error}</p>}
           <button disabled={loading}
-            className="rounded-lg bg-green-600 py-2 font-semibold text-white disabled:opacity-50">
+            className="btn w-full">
             {loading ? "Saving..." : "Save new password"}
           </button>
         </form>

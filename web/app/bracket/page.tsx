@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
@@ -24,7 +24,7 @@ type Match = {
   loser_next_match_id: string | null;
 };
 
-const input = "w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-black";
+const input = "field";
 
 function roundName(round: number, rounds: number) {
   const fromEnd = rounds - round;
@@ -158,9 +158,9 @@ export default function PublicBracketPage() {
   }
 
   return (
-    <main className="mx-auto flex max-w-2xl flex-col gap-6 p-6">
+    <main className="mx-auto flex max-w-3xl flex-col gap-6 p-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Live brackets</h1>
+        <h1 className="text-3xl font-bold tracking-tight">Live brackets</h1>
       </div>
 
       {!loaded && <p className="text-sm text-gray-500">Loading...</p>}
@@ -169,7 +169,7 @@ export default function PublicBracketPage() {
       )}
 
       {tournaments.length > 0 && (
-        <div className="flex flex-col gap-3">
+        <div className="card grid gap-4 sm:grid-cols-2">
           <select className={input} value={tournamentId}
             onChange={(e) => { setTournamentId(e.target.value); setEventId(""); }}>
             <option value="">Select tournament</option>
@@ -209,7 +209,7 @@ export default function PublicBracketPage() {
       )}
 
       {champion && (
-        <div className="rounded-lg border border-green-600 p-4 text-center">
+        <div className="card !border-green-600 text-center">
           <p className="text-sm text-gray-400">Champion</p>
           <p className="text-xl font-bold text-green-400">{champion}</p>
         </div>
@@ -235,8 +235,8 @@ export default function PublicBracketPage() {
               );
               return (
                 <div key={m.id}
-                  className={`rounded-lg border p-3 text-sm ${
-                    label === "Up next" ? "border-green-600" : "border-gray-700"
+                  className={`card-sm text-sm ${
+                    label === "Up next" ? "!border-green-600" : ""
                   }`}>
                   <p className="mb-1 text-xs text-gray-400">
                     Match {m.match_no} · {m.game_type} · first to {m.legs_to_win} · {label}

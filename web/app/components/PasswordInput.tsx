@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useState } from "react";
 
@@ -37,7 +37,7 @@ export default function PasswordInput({
       <button
         type="button"
         onClick={() => setShow(!show)}
-        className="absolute right-3 top-1/2 -translate-y-1/2 text-sm font-medium text-gray-600 hover:text-black"
+        className="absolute right-3 top-1/2 -translate-y-1/2 text-sm font-medium text-gray-400 hover:text-white"
         aria-label={show ? "Hide password" : "Show password"}
       >
         {show ? "Hide" : "Show"}

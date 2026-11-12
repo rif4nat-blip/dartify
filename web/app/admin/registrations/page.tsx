@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -28,9 +28,16 @@ type Reg = {
   reference_no: string | null;
 };
 
-const input = "w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-black";
-const button = "rounded-lg bg-green-600 px-4 py-2 font-semibold text-white";
-const small = "rounded-lg border border-gray-300 bg-white px-2 py-1 text-sm text-black";
+const input = "field";
+const button = "btn";
+const small = "field !w-auto !px-3 !py-1.5 text-sm";
+const label = "flex flex-col gap-1.5 text-sm text-gray-300";
+
+function payPill(status: string) {
+  if (status === "paid") return "bg-green-900 text-green-300";
+  if (status === "pending") return "bg-amber-900/60 text-amber-300";
+  return "bg-gray-700 text-gray-300";
+}
 
 function shuffle<T>(items: T[]): T[] {
   const a = [...items];
@@ -271,42 +278,74 @@ export default function AdminRegistrationsPage() {
   if (!ready) return <main className="p-6">Loading...</main>;
 
   return (
-    <main className="mx-auto flex max-w-2xl flex-col gap-6 p-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Registrations and draw</h1>
-        <Link href="/admin/tournaments" className="underline">Tournaments</Link>
+    <main className="mx-auto flex max-w-3xl flex-col gap-6 p-6">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Registrations and draw</h1>
+          <p className="mt-1 text-sm text-gray-400">
+            Approve payments, add walk-ins and draw the teams.
+          </p>
+        </div>
+        <Link href="/admin/tournaments" className="btn-ghost">Tournaments</Link>
       </div>
 
       {message && <p className="text-sm text-yellow-300">{message}</p>}
 
-      <div className="flex flex-col gap-3">
-        <select className={input} value={tournamentId}
-          onChange={(e) => { setTournamentId(e.target.value); setEventId(""); }}>
-          <option value="">Select tournament</option>
-          {tournaments.map((t) => (
-            <option key={t.id} value={t.id}>{t.name}</option>
-          ))}
-        </select>
-        <select className={input} value={eventId} disabled={!tournamentId}
-          onChange={(e) => setEventId(e.target.value)}>
-          <option value="">Select event</option>
-          {events.filter((x) => x.tournament_id === tournamentId).map((x) => (
-            <option key={x.id} value={x.id}>{x.name}</option>
-          ))}
-        </select>
+      <div className="card grid gap-4 sm:grid-cols-2">
+        <label className={label}>
+          Tournament
+          <select className={input} value={tournamentId}
+            onChange={(e) => { setTournamentId(e.target.value); setEventId(""); }}>
+            <option value="">Select tournament</option>
+            {tournaments.map((t) => (
+              <option key={t.id} value={t.id}>{t.name}</option>
+            ))}
+          </select>
+        </label>
+        <label className={label}>
+          Event
+          <select className={input} value={eventId} disabled={!tournamentId}
+            onChange={(e) => setEventId(e.target.value)}>
+            <option value="">Select event</option>
+            {events.filter((x) => x.tournament_id === tournamentId).map((x) => (
+              <option key={x.id} value={x.id}>{x.name}</option>
+            ))}
+          </select>
+        </label>
       </div>
 
       {ev && (
         <>
-          <section className="rounded-lg border border-gray-600 p-4">
-            <p className="font-semibold">{ev.name}</p>
-            <p className="text-sm text-gray-400">
-              {ev.format === "single" ? "Single" : "Double"} elimination · {ev.category} ·{" "}
-              {evRegs.length} player(s) · {paidCount} paid · Registration{" "}
-              {ev.status === "open" ? "open" : "closed"}
-            </p>
-            <div className="mt-3 flex flex-wrap gap-2">
-              <button className={button} onClick={toggleRegistration}>
+          <section className="card">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <p className="text-lg font-semibold">
+                  {ev.name}{" "}
+                  <span className={`ml-1 rounded-full px-2.5 py-0.5 text-xs font-medium ${
+                    ev.status === "open"
+                      ? "bg-green-900 text-green-300"
+                      : "bg-gray-700 text-gray-300"
+                  }`}>
+                    Registration {ev.status === "open" ? "open" : "closed"}
+                  </span>
+                </p>
+                <p className="text-sm text-gray-400">
+                  {ev.format === "single" ? "Single" : "Double"} elimination · {ev.category}
+                </p>
+              </div>
+              <div className="flex gap-4 text-center">
+                <div>
+                  <p className="text-2xl font-bold text-green-500">{evRegs.length}</p>
+                  <p className="text-xs text-gray-400">Players</p>
+                </div>
+                <div>
+                  <p className="text-2xl font-bold text-green-500">{paidCount}</p>
+                  <p className="text-xs text-gray-400">Paid</p>
+                </div>
+              </div>
+            </div>
+            <div className="mt-4 flex flex-wrap gap-2">
+              <button className="btn-ghost" onClick={toggleRegistration}>
                 {ev.status === "open" ? "Close registration" : "Reopen registration"}
               </button>
               {canScramble && (
@@ -316,40 +355,50 @@ export default function AdminRegistrationsPage() {
               )}
             </div>
             {isClassified && (
-              <p className="mt-2 text-sm text-gray-400">
+              <p className="mt-3 text-sm text-gray-400">
                 Set each player class (A, B{ev.team_size === 3 ? ", C is optional" : ""}) before
                 scrambling.
               </p>
             )}
           </section>
 
-          <section>
-            <h2 className="mb-3 text-lg font-semibold">
+          <section className="card">
+            <h2 className="mb-4 text-lg font-semibold">
               {isFixed ? "Add a walk-in team" : "Add a walk-in player"}
             </h2>
-            <form onSubmit={addWalkIn} className="flex flex-col gap-3">
+            <form onSubmit={addWalkIn} className="flex flex-col gap-4">
               {isFixed ? (
                 <>
-                  <input className={input} placeholder="Team name" value={walkTeamName}
-                    onChange={(e) => setWalkTeamName(e.target.value)} />
+                  <label className={label}>
+                    Team name
+                    <input className={input} value={walkTeamName}
+                      onChange={(e) => setWalkTeamName(e.target.value)} />
+                  </label>
                   {memberFields.map((n, i) => (
-                    <input key={i} className={input} placeholder={`Member ${i + 1} full name`}
-                      value={n}
-                      onChange={(e) =>
-                        setWalkMembers(memberFields.map((x, j) => (j === i ? e.target.value : x)))
-                      } />
+                    <label key={i} className={label}>
+                      Member {i + 1} full name
+                      <input className={input} value={n}
+                        onChange={(e) =>
+                          setWalkMembers(memberFields.map((x, j) => (j === i ? e.target.value : x)))
+                        } />
+                    </label>
                   ))}
                 </>
               ) : (
-                <input className={input} placeholder="Player full name" value={walkName}
-                  onChange={(e) => setWalkName(e.target.value)} />
+                <label className={label}>
+                  Player full name
+                  <input className={input} value={walkName}
+                    onChange={(e) => setWalkName(e.target.value)} />
+                </label>
               )}
               <label className="flex items-center gap-2 text-sm">
                 <input type="checkbox" checked={walkPaid}
                   onChange={(e) => setWalkPaid(e.target.checked)} />
                 Paid now
               </label>
-              <button className={button}>Add</button>
+              <div>
+                <button className={`${button} w-full sm:w-auto`}>Add</button>
+              </div>
             </form>
           </section>
 
@@ -359,10 +408,10 @@ export default function AdminRegistrationsPage() {
               <div className="flex flex-col gap-2">
                 {evTeams.map((t) => (
                   <div key={t.id}
-                    className="flex items-start justify-between gap-2 rounded-lg border border-gray-700 p-3 text-sm">
+                    className="card-sm flex items-start justify-between gap-2 text-sm">
                     <div>
                       <p className="font-semibold">{t.team_name}</p>
-                      <p>
+                      <p className="text-gray-300">
                         {evRegs
                           .filter((r) => r.team_id === t.id)
                           .map((r) => r.display_name + (r.skill_class ? ` (${r.skill_class})` : ""))
@@ -371,7 +420,9 @@ export default function AdminRegistrationsPage() {
                     </div>
                     {isFixed && (
                       <button onClick={() => removeTeam(t.id)}
-                        className="text-red-400 underline">Remove team</button>
+                        className="rounded-xl px-3 py-1.5 text-red-400 hover:bg-red-500/10">
+                        Remove team
+                      </button>
                     )}
                   </div>
                 ))}
@@ -389,12 +440,15 @@ export default function AdminRegistrationsPage() {
             {evRegs.length === 0 && <p className="text-sm text-gray-500">No players yet.</p>}
             <div className="flex flex-col gap-2">
               {evRegs.map((r) => (
-                <div key={r.id} className="rounded-lg border border-gray-700 p-3 text-sm">
+                <div key={r.id} className="card-sm text-sm">
                   <div className="flex items-start justify-between gap-2">
                     <div>
                       <p className="font-semibold">
                         {r.display_name}
-                        {!r.player_id && <span className="ml-2 text-gray-400">(walk-in)</span>}
+                        {!r.player_id && <span className="ml-2 font-normal text-gray-400">(walk-in)</span>}
+                        <span className={`ml-2 rounded-full px-2 py-0.5 text-xs font-medium ${payPill(r.payment_status)}`}>
+                          {r.payment_status}
+                        </span>
                       </p>
                       <p className="text-gray-400">
                         {r.payment_method === "online" ? "Online" : "At the event"}
@@ -405,7 +459,7 @@ export default function AdminRegistrationsPage() {
                       </p>
                     </div>
                     <button onClick={() => removeReg(r.id)}
-                      className="text-red-400 underline">Remove</button>
+                      className="rounded-xl px-3 py-1.5 text-red-400 hover:bg-red-500/10">Remove</button>
                   </div>
                   <div className="mt-2 flex flex-wrap gap-2">
                     <select className={small} value={r.payment_status}

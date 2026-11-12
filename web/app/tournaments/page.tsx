@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
@@ -36,8 +36,8 @@ type Count = { event_id: string; players: number; teams: number };
 type Podium = { event_id: string; entry_id: string; placement: number };
 type EntryName = { id: string; name: string };
 
-const input = "w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-black";
-const button = "rounded-lg bg-green-600 px-4 py-2 font-semibold text-white";
+const input = "field";
+const button = "btn";
 
 function howItWorks(ev: EventRow) {
   if (ev.category === "fixed") return "Register your set team together.";
@@ -176,10 +176,10 @@ export default function TournamentsPage() {
   const entryName = new Map(entryNames.map((e) => [e.id, e.name]));
 
   return (
-    <main className="mx-auto flex max-w-2xl flex-col gap-6 p-6">
+    <main className="mx-auto flex max-w-3xl flex-col gap-6 p-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Tournaments</h1>
-        <Link href={userId ? "/dashboard" : "/login"} className="underline">
+        <h1 className="text-3xl font-bold tracking-tight">Tournaments</h1>
+        <Link href={userId ? "/dashboard" : "/login"} className="btn-ghost">
           {userId ? "Dashboard" : "Log in"}
         </Link>
       </div>
@@ -191,7 +191,7 @@ export default function TournamentsPage() {
       )}
 
       {active.map((t) => (
-        <section key={t.id} className="rounded-lg border border-gray-600 p-4">
+        <section key={t.id} className="card">
           <p className="text-lg font-semibold">{t.name}</p>
           <p className="text-sm text-gray-400">
             {t.event_date} · {t.venue || "Venue to be announced"} · Fee PHP {t.registration_fee}
@@ -212,7 +212,7 @@ export default function TournamentsPage() {
                 const full = ev.max_entries !== null && count >= ev.max_entries;
 
                 return (
-                  <div key={ev.id} className="rounded-lg border border-gray-700 p-3">
+                  <div key={ev.id} className="card-sm">
                     <p className="font-medium">{ev.name}</p>
                     <p className="text-sm text-gray-400">
                       {ev.format === "single" ? "Single" : "Double"} elimination · {count}
@@ -300,7 +300,7 @@ export default function TournamentsPage() {
 
           {showPast &&
             past.map((t) => (
-              <div key={t.id} className="rounded-lg border border-gray-700 p-4">
+              <div key={t.id} className="card">
                 <p className="text-lg font-semibold">{t.name}</p>
                 <p className="text-sm text-gray-400">
                   {t.event_date} · {t.venue || "Venue not listed"}
@@ -313,7 +313,7 @@ export default function TournamentsPage() {
                         .filter((p) => p.event_id === ev.id)
                         .sort((a, b) => a.placement - b.placement);
                       return (
-                        <div key={ev.id} className="rounded-lg border border-gray-800 p-3 text-sm">
+                        <div key={ev.id} className="card-sm text-sm">
                           <p className="font-medium">
                             {ev.name}{" "}
                             <span className="font-normal text-gray-400">

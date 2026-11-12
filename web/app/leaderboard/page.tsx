@@ -16,7 +16,7 @@ type EventRow = { id: string; tournament_id: string; name: string };
 type Result = { event_id: string; entry_id: string; placement: number; points: number };
 type Entry = { id: string; name: string };
 
-const input = "w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-black";
+const input = "field";
 
 function placeLabel(p: number) {
   if (p === 1) return "Champion";
@@ -90,9 +90,9 @@ export default function LeaderboardPage() {
   const eventResults = results.filter((r) => r.event_id === eventId);
 
   return (
-    <main className="mx-auto flex max-w-2xl flex-col gap-8 p-6">
+    <main className="mx-auto flex max-w-3xl flex-col gap-8 p-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Leaderboard</h1>
+        <h1 className="text-3xl font-bold tracking-tight">Leaderboard</h1>
       </div>
 
       <section className="flex flex-col gap-3">

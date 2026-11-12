@@ -8,14 +8,73 @@ body {
   color: #e8efe9;
   font-family: Arial, Helvetica, sans-serif;
 }
-input,
-select,
-textarea {
-  color: #111;
-}
+
 @media print {
   body {
     background: #fff;
     color: #000;
   }
+}
+
+@layer components {
+  .card {
+    border-radius: 1rem;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: rgba(255, 255, 255, 0.03);
+    padding: 1.25rem;
+  }
+  .card-sm {
+    border-radius: 0.75rem;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(255, 255, 255, 0.02);
+    padding: 0.875rem;
+  }
+  .field {
+    width: 100%;
+    border-radius: 0.75rem;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    background: #111916;
+    color: #e8efe9;
+    padding: 0.65rem 0.9rem;
+    font-size: 1rem;
+    outline: none;
+  }
+  .field::placeholder { color: #6b7a70; }
+  .field:focus {
+    border-color: #22c55e;
+    box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.25);
+  }
+  .field:disabled { opacity: 0.6; }
+  select.field option { background: #111916; color: #e8efe9; }
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 0.75rem;
+    background: #16a34a;
+    color: #fff;
+    padding: 0.65rem 1.25rem;
+    font-weight: 600;
+    transition: background 0.15s;
+  }
+  .btn:hover { background: #22c55e; }
+  .btn:disabled { opacity: 0.5; }
+}
+
+@media print {
+  .card, .card-sm { background: none; border-color: #bbb; }
+  .field { background: #fff; color: #000; border-color: #999; }
+}
+@layer components {
+  .btn-ghost {
+    display: inline-flex;
+    align-items: center;
+    border-radius: 0.75rem;
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    padding: 0.4rem 0.9rem;
+    font-size: 0.875rem;
+    color: #e8efe9;
+    transition: background 0.15s;
+  }
+  .btn-ghost:hover { background: rgba(255, 255, 255, 0.06); }
 }

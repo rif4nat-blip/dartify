@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -55,9 +55,9 @@ type NewMatch = {
 };
 type Item = { name: string; team_id: string | null; registration_id: string | null };
 
-const input = "w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-black";
-const small = "rounded-lg border border-gray-300 bg-white px-2 py-1 text-sm text-black";
-const button = "rounded-lg bg-green-600 px-4 py-2 font-semibold text-white";
+const input = "field";
+const small = "field !px-3 !py-1.5 text-sm";
+const button = "btn";
 
 function shuffle<T>(items: T[]): T[] {
   const a = [...items];
@@ -496,15 +496,15 @@ export default function AdminBracketPage() {
   if (!ready) return <main className="p-6">Loading...</main>;
 
   return (
-    <main className="mx-auto flex max-w-2xl flex-col gap-6 p-6">
+    <main className="mx-auto flex max-w-3xl flex-col gap-6 p-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Bracket and scores</h1>
-        <Link href="/admin/registrations" className="underline">Registrations</Link>
+        <h1 className="text-3xl font-bold tracking-tight">Bracket and scores</h1>
+        <Link href="/admin/registrations" className="btn-ghost">Registrations</Link>
       </div>
 
       {message && <p className="text-sm text-yellow-300">{message}</p>}
 
-      <div className="flex flex-col gap-3">
+      <div className="card grid gap-4 sm:grid-cols-2">
         <select className={input} value={tournamentId}
           onChange={(e) => { setTournamentId(e.target.value); setEventId(""); }}>
           <option value="">Select tournament</option>
@@ -523,7 +523,7 @@ export default function AdminBracketPage() {
 
       {ev && (
         <>
-          <section className="rounded-lg border border-gray-600 p-4">
+          <section className="card">
             <p className="font-semibold">{ev.name}</p>
             <p className="text-sm text-gray-400">
               {isDouble ? "Double" : "Single"} elimination ·{" "}
@@ -567,7 +567,7 @@ export default function AdminBracketPage() {
                   const played = m.status === "completed" && !!m.entry1_id && !!m.entry2_id;
                   const cur = current(m);
                   return (
-                    <div key={m.id} className="rounded-lg border border-gray-700 p-3 text-sm">
+                    <div key={m.id} className="card-sm text-sm">
                       <p className="text-gray-400">
                         Match {m.match_no} · {m.game_type} · first to {m.legs_to_win}
                       </p>
@@ -585,7 +585,7 @@ export default function AdminBracketPage() {
                           <input type="number" min="0" className={`${small} w-16`} value={cur.b}
                             onChange={(e) => setScore(m, "b", e.target.value)} />
                           <button onClick={() => saveScore(m)}
-                            className="rounded-lg bg-green-600 px-3 py-1 text-sm font-semibold text-white">
+                            className="btn !px-3 !py-1 text-sm">
                             {m.status === "completed" ? "Update score" : "Save score"}
                           </button>
                         </div>

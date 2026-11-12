@@ -38,8 +38,8 @@ type Row = {
 };
 type Col = { label: string; get: (r: Row, i: number) => string };
 
-const input = "w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-black";
-const button = "rounded-lg bg-green-600 px-4 py-2 font-semibold text-white";
+const input = "field";
+const button = "btn";
 
 function fmt(date: string) {
   return new Date(date + "T00:00:00").toLocaleDateString("en-PH", {
@@ -220,7 +220,7 @@ export default function AdminPrintPage() {
   return (
     <main className="mx-auto flex max-w-3xl flex-col gap-6 p-6 print:max-w-none print:p-0">
       <div className="flex items-center justify-between print:hidden">
-        <h1 className="text-2xl font-bold">Printable player list</h1>
+        <h1 className="text-3xl font-bold tracking-tight">Printable player list</h1>
       </div>
 
       <div className="flex flex-col gap-3 print:hidden">

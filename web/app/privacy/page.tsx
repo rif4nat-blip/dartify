@@ -7,9 +7,9 @@ export const metadata = { title: "Privacy notice" };
 
 export default function PrivacyPage() {
   return (
-    <main className="mx-auto flex max-w-2xl flex-col gap-5 p-6">
+    <main className="mx-auto flex max-w-3xl flex-col gap-5 p-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Privacy notice</h1>
+        <h1 className="text-3xl font-bold tracking-tight">Privacy notice</h1>
         <Link href="/register" className="underline">Back</Link>
       </div>
       <p className="text-sm text-gray-400">Last updated: November 2026</p>

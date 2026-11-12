@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -24,8 +24,8 @@ type Match = {
 type Saved = { entry_id: string; placement: number; points: number };
 type Row = { entryId: string; placement: number; label: string; points: number };
 
-const input = "w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-black";
-const button = "rounded-lg bg-green-600 px-4 py-2 font-semibold text-white";
+const input = "field";
+const button = "btn";
 
 const POINTS = { champion: 15, runnerUp: 10, semifinal: 5, quarterfinal: 3 };
 
@@ -185,15 +185,15 @@ export default function AdminResultsPage() {
   if (!ready) return <main className="p-6">Loading...</main>;
 
   return (
-    <main className="mx-auto flex max-w-2xl flex-col gap-6 p-6">
+    <main className="mx-auto flex max-w-3xl flex-col gap-6 p-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Event points</h1>
-        <Link href="/leaderboard" className="underline">Leaderboard</Link>
+        <h1 className="text-3xl font-bold tracking-tight">Event points</h1>
+        <Link href="/leaderboard" className="btn-ghost">Leaderboard</Link>
       </div>
 
       {message && <p className="text-sm text-yellow-300">{message}</p>}
 
-      <div className="flex flex-col gap-3">
+      <div className="card grid gap-4 sm:grid-cols-2">
         <select className={input} value={tournamentId}
           onChange={(e) => { setTournamentId(e.target.value); setEventId(""); }}>
           <option value="">Select tournament</option>
