@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
+import PasswordInput from "../components/PasswordInput";
 
 const input = "w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-black";
 
@@ -60,10 +61,10 @@ export default function ResetPasswordPage() {
         </>
       ) : ready ? (
         <form onSubmit={handleSubmit} className="flex flex-col gap-3">
-          <input className={input} type="password" placeholder="New password" value={password}
-            onChange={(e) => setPassword(e.target.value)} required />
-          <input className={input} type="password" placeholder="Repeat the new password"
-            value={confirm} onChange={(e) => setConfirm(e.target.value)} required />
+          <PasswordInput className={input} placeholder="New password" value={password}
+            onChange={setPassword} required autoComplete="new-password" />
+          <PasswordInput className={input} placeholder="Repeat the new password"
+            value={confirm} onChange={setConfirm} required autoComplete="new-password" />
           {error && <p className="text-sm text-red-500">{error}</p>}
           <button disabled={loading}
             className="rounded-lg bg-green-600 py-2 font-semibold text-white disabled:opacity-50">

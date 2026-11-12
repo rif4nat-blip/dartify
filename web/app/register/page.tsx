@@ -1,9 +1,10 @@
-"use client";
+﻿"use client";
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
+import PasswordInput from "../components/PasswordInput";
 
 const input = "w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-black";
 
@@ -72,8 +73,9 @@ export default function RegisterPage() {
           onChange={(e) => setPhone(e.target.value)} />
         <input className={input} type="email" placeholder="Email" value={email}
           onChange={(e) => setEmail(e.target.value)} required />
-        <input className={input} type="password" placeholder="Password (min 6 characters)"
-          value={password} onChange={(e) => setPassword(e.target.value)} minLength={6} required />
+        <PasswordInput className={input} placeholder="Password (min 6 characters)"
+          value={password} onChange={setPassword} minLength={6} required
+          autoComplete="new-password" />
         <label className="flex items-start gap-2 text-sm">
           <input type="checkbox" className="mt-1" checked={agree}
             onChange={(e) => setAgree(e.target.checked)} required />
