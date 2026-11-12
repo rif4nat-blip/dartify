@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -11,6 +11,7 @@ const playerLinks = [
   ["Browse tournaments", "Find an event and join.", "/tournaments"],
   ["Live brackets", "Follow matches in real time.", "/bracket"],
   ["Leaderboard", "See the points ranking.", "/leaderboard"],
+  ["My profile", "Your stats and tournament history.", "/profile"],
 ];
 
 const adminLinks = [
@@ -23,16 +24,16 @@ const adminLinks = [
 
 function CardLink({ title, desc, href }: { title: string; desc: string; href: string }) {
   return (
-    <div className="flex flex-col gap-2 rounded-xl border border-white/10 bg-white/5 p-5">
-      <div className="text-lg font-semibold">{title}</div>
+    <Link
+      href={href}
+      className="card group flex flex-col gap-1.5 transition hover:border-green-600 hover:bg-white/[0.07]"
+    >
+      <div className="flex items-center justify-between">
+        <span className="text-lg font-semibold">{title}</span>
+        <span className="text-green-400 transition group-hover:translate-x-1">&rarr;</span>
+      </div>
       <p className="text-sm text-gray-400">{desc}</p>
-      <Link
-        href={href}
-        className="mt-2 w-fit rounded border border-green-500 px-4 py-2 text-sm text-green-400 hover:bg-green-500/10"
-      >
-        Open
-      </Link>
-    </div>
+    </Link>
   );
 }
 
@@ -57,34 +58,37 @@ export default function DashboardPage() {
     load();
   }, [router]);
 
-  if (!profile) return <main className="mx-auto max-w-6xl px-5 py-10">Loading...</main>;
+  if (!profile) {
+    return <main className="mx-auto max-w-5xl px-5 py-10 text-gray-400">Loading...</main>;
+  }
+
+  const isAdmin = profile.role === "admin";
+  const links = isAdmin ? adminLinks : playerLinks;
 
   return (
-    <main className="mx-auto max-w-6xl px-5 py-8 md:py-10">
-      <h1 className="text-2xl font-bold md:text-3xl">Welcome, {profile.full_name}</h1>
-      <p className="mt-1 text-sm text-gray-400">Role: {profile.role}</p>
+    <main className="mx-auto flex max-w-5xl flex-col gap-8 px-5 py-8 md:py-10">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <p className="text-sm text-gray-400">Welcome back</p>
+          <h1 className="text-3xl font-bold tracking-tight">{profile.full_name}</h1>
+        </div>
+        <span className={`rounded-full border px-3 py-1 text-xs font-medium ${
+          isAdmin
+            ? "border-green-600 bg-green-600/15 text-green-400"
+            : "border-white/15 bg-white/5 text-gray-300"
+        }`}>
+          {isAdmin ? "Admin" : "Player"}
+        </span>
+      </div>
 
-           {profile.role !== "admin" && (
-        <>
-          <h2 className="mb-3 mt-8 text-xl font-semibold">Player</h2>
-          <div className="grid gap-4 md:grid-cols-3">
-            {playerLinks.map(([t, d, h]) => (
-              <CardLink key={h} title={t} desc={d} href={h} />
-            ))}
-          </div>
-        </>
-      )}
-
-      {profile.role === "admin" && (
-        <>
-          <h2 className="mb-3 mt-10 text-xl font-semibold">Admin</h2>
-          <div className="grid gap-4 md:grid-cols-3">
-            {adminLinks.map(([t, d, h]) => (
-              <CardLink key={h} title={t} desc={d} href={h} />
-            ))}
-          </div>
-        </>
-      )}
+      <section>
+        <h2 className="mb-3 text-lg font-semibold">{isAdmin ? "Admin tools" : "Quick links"}</h2>
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {links.map(([t, d, h]) => (
+            <CardLink key={h} title={t} desc={d} href={h} />
+          ))}
+        </div>
+      </section>
     </main>
   );
 }
