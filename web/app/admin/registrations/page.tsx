@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -27,6 +27,8 @@ type Reg = {
   payment_status: string;
   reference_no: string | null;
 };
+
+type Match = { id: string; full_name: string; phone: string | null };
 
 const input = "field";
 const button = "btn";
@@ -103,6 +105,10 @@ export default function AdminRegistrationsPage() {
   const [walkPaid, setWalkPaid] = useState(false);
   const [walkTeamName, setWalkTeamName] = useState("");
   const [walkMembers, setWalkMembers] = useState<string[]>([]);
+  const [linkingId, setLinkingId] = useState<string | null>(null);
+  const [linkQuery, setLinkQuery] = useState("");
+  const [linkResults, setLinkResults] = useState<Match[]>([]);
+  const [linkAll, setLinkAll] = useState(true);
 
   const load = useCallback(async () => {
     const [t, e, tm, r] = await Promise.all([
@@ -165,6 +171,51 @@ export default function AdminRegistrationsPage() {
 
   async function setClass(id: string, cls: string) {
     await supabase.from("registrations").update({ skill_class: cls || null }).eq("id", id);
+    load();
+  }
+
+  async function searchAccounts(q: string) {
+    setLinkQuery(q);
+    const term = q.trim().replace(/[%_,()]/g, "");
+    if (term.length < 2) {
+      setLinkResults([]);
+      return;
+    }
+    const { data } = await supabase
+      .from("profiles")
+      .select("id, full_name, phone")
+      .or(`full_name.ilike.%${term}%,phone.ilike.%${term}%`)
+      .limit(8);
+    setLinkResults((data ?? []) as Match[]);
+  }
+
+  async function linkAccount(reg: Reg, account: Match) {
+    setMessage("");
+    const { error } = await supabase
+      .from("registrations")
+      .update({ player_id: account.id })
+      .eq("id", reg.id);
+    if (error) {
+      setMessage(
+        error.code === "23505"
+          ? `${account.full_name} is already registered in this event. Remove the walk-in entry instead.`
+          : error.message
+      );
+      return;
+    }
+    let note = "";
+    if (linkAll) {
+      const { error: e2 } = await supabase
+        .from("registrations")
+        .update({ player_id: account.id })
+        .is("player_id", null)
+        .ilike("display_name", reg.display_name.trim());
+      if (e2) note = " Other entries with the same name could not be linked (the account may already be in those events).";
+    }
+    setMessage(`Linked ${reg.display_name} to the account of ${account.full_name}.${note}`);
+    setLinkingId(null);
+    setLinkQuery("");
+    setLinkResults([]);
     load();
   }
 
@@ -461,7 +512,45 @@ export default function AdminRegistrationsPage() {
                     <button onClick={() => removeReg(r.id)}
                       className="rounded-xl px-3 py-1.5 text-red-400 hover:bg-red-500/10">Remove</button>
                   </div>
+                  {linkingId === r.id && (
+                    <div className="mt-3 flex flex-col gap-2 rounded-xl border border-white/10 bg-black/20 p-3">
+                      <input className="field" autoFocus placeholder="Search the account by name or phone"
+                        value={linkQuery} onChange={(e) => searchAccounts(e.target.value)} />
+                      {linkQuery.trim().length >= 2 && linkResults.length === 0 && (
+                        <p className="text-xs text-gray-400">
+                          No account found. Check the spelling, or ask the player to register first.
+                        </p>
+                      )}
+                      {linkResults.map((m) => (
+                        <div key={m.id} className="flex items-center justify-between gap-2">
+                          <span>
+                            {m.full_name}
+                            {m.phone ? <span className="text-gray-400"> · {m.phone}</span> : null}
+                          </span>
+                          <button type="button" className="btn-ghost !px-3 !py-1.5 text-sm"
+                            onClick={() => linkAccount(r, m)}>
+                            Link
+                          </button>
+                        </div>
+                      ))}
+                      <label className="flex items-center gap-2 text-xs text-gray-300">
+                        <input type="checkbox" className="accent-green-600" checked={linkAll}
+                          onChange={(e) => setLinkAll(e.target.checked)} />
+                        Also link other walk-in entries named {r.display_name}
+                      </label>
+                    </div>
+                  )}
                   <div className="mt-2 flex flex-wrap gap-2">
+                    {!r.player_id && (
+                      <button type="button" className="btn-ghost !px-3 !py-1.5 text-sm"
+                        onClick={() => {
+                          setLinkingId(linkingId === r.id ? null : r.id);
+                          setLinkQuery("");
+                          setLinkResults([]);
+                        }}>
+                        Link to account
+                      </button>
+                    )}
                     <select className={small} value={r.payment_status}
                       onChange={(e) => setPayment(r.id, e.target.value)}>
                       <option value="unpaid">Unpaid</option>
