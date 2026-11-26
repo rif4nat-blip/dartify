@@ -1,12 +1,13 @@
-﻿"use client";
+"use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import {
-  pairs, roundDates, roundRobin, roundRobinComplete, standings, tiebreakNeeded, winnerFromScores,
+  nextMatchups, pairs, roundRobinComplete, standings, tiebreakNeeded, winnerFromScores,
 } from "@/lib/leagueLogic";
+import { downloadLeagueXlsx, numberTeams } from "@/lib/leagueExport";
 
 type League = { id: string; name: string; game_days: string[]; season_start: string | null };
 type LeagueEvent = {
@@ -28,9 +29,17 @@ type Game = {
   status: string;
   kind: string;
 };
+type Slot = { a: string; b: string };
 
 const label = "flex flex-col gap-1.5 text-sm text-gray-300";
 const small = "field !w-auto !px-3 !py-1.5 text-sm";
+
+function todayStr() {
+  const d = new Date();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${d.getFullYear()}-${m}-${day}`;
+}
 
 function niceDate(d: string | null) {
   if (!d) return "No date yet";
@@ -38,6 +47,12 @@ function niceDate(d: string | null) {
   return new Date(y, m - 1, day).toLocaleDateString("en-PH", {
     weekday: "long", month: "long", day: "numeric", year: "numeric",
   });
+}
+
+function shortDate(d: string) {
+  if (!d) return "No date";
+  const [y, m, day] = d.split("-").map(Number);
+  return new Date(y, m - 1, day).toLocaleDateString("en-PH", { weekday: "short", month: "short", day: "numeric" });
 }
 
 export default function AdminLeagueGamesPage() {
@@ -51,13 +66,9 @@ export default function AdminLeagueGamesPage() {
   const [leagueId, setLeagueId] = useState("");
   const [eventId, setEventId] = useState("");
   const [draft, setDraft] = useState<Record<string, { a: string; b: string }>>({});
-
-  const [gDate, setGDate] = useState("");
-  const [gNo, setGNo] = useState("");
-  const [gTable, setGTable] = useState("");
-  const [gT1, setGT1] = useState("");
-  const [gT2, setGT2] = useState("");
-  const [gKind, setGKind] = useState("regular");
+  const [night, setNight] = useState<string | null>(null);
+  const [slots, setSlots] = useState<Slot[]>([]);
+  const [count, setCount] = useState("6");
 
   const load = useCallback(async () => {
     const [l, e, t, g] = await Promise.all([
@@ -82,8 +93,10 @@ export default function AdminLeagueGamesPage() {
       const q = new URLSearchParams(window.location.search);
       const l = q.get("league");
       const e = q.get("event");
+      const d = q.get("date");
       if (l) setLeagueId(l);
       if (e) setEventId(e);
+      if (d) setNight(d);
       setReady(true);
     }
     init();
@@ -92,70 +105,142 @@ export default function AdminLeagueGamesPage() {
   const league = leagues.find((x) => x.id === leagueId);
   const lEvents = events.filter((x) => x.league_id === leagueId);
   const ev = events.find((x) => x.id === eventId && x.league_id === leagueId);
-  const evTeams = teams.filter((x) => x.league_event_id === eventId);
-  const evGames = games.filter((x) => x.league_event_id === eventId);
+  const evTeams = useMemo(() => teams.filter((x) => x.league_event_id === eventId), [teams, eventId]);
+  const evGames = useMemo(() => games.filter((x) => x.league_event_id === eventId), [games, eventId]);
+  const teamNo = useMemo(() => numberTeams(evTeams).no, [evTeams]);
   const name = (id: string) => teams.find((t) => t.id === id)?.name ?? "?";
 
   const rows = standings(evTeams, evGames);
   const complete = roundRobinComplete(evGames);
   const needed = ev && ev.tiebreak_before_knockout && complete ? tiebreakNeeded(rows, ev.cut) : [];
 
-  async function addGame(e: React.FormEvent) {
-    e.preventDefault();
+  // game nights that already have games, oldest first
+  const nightKeys = useMemo(() => {
+    const set = new Set<string>();
+    for (const g of evGames) set.add(g.game_date ?? "");
+    const list = [...set].sort((a, b) => (a === "" ? 1 : b === "" ? -1 : a.localeCompare(b)));
+    if (night !== null && !set.has(night)) list.push(night);
+    return list;
+  }, [evGames, night]);
+
+  // pick a night when a category is opened
+  useEffect(() => {
+    if (!eventId) return;
+    setSlots([]);
+    setDraft({});
+    if (night !== null) return;
+    const dates = [...new Set(evGames.map((g) => g.game_date).filter(Boolean) as string[])].sort();
+    const t = todayStr();
+    setNight(dates.find((d) => d >= t) ?? dates[dates.length - 1] ?? t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [eventId, evGames.length > 0]);
+
+  const nightGames = useMemo(
+    () => evGames
+      .filter((g) => (g.game_date ?? "") === (night ?? ""))
+      .sort((a, b) => (a.game_no ?? 999) - (b.game_no ?? 999)),
+    [evGames, night]
+  );
+  const busyIds = useMemo(() => {
+    const s = new Set<string>();
+    for (const g of nightGames) if (g.status !== "cancelled") { s.add(g.team1_id); s.add(g.team2_id); }
+    return s;
+  }, [nightGames]);
+  const nextNo = nightGames.reduce((m, g) => Math.max(m, g.game_no ?? 0), 0) + 1;
+  const nightPlayed = nightGames.filter((g) => g.status === "played").length;
+
+  function suggest() {
     if (!ev) return;
+    const n = Math.max(1, Math.min(50, Number(count) || 1));
+    const existing = evGames.filter((g) => g.kind === "regular" && g.status !== "cancelled")
+      .map((g) => [g.team1_id, g.team2_id] as [string, string]);
+    const busy = new Set(busyIds);
+    const out = nextMatchups(evTeams.map((t) => t.id), existing, ev.rounds === "double" ? 2 : 1, n, busy);
+    if (out.length === 0) { setMessage("No new matchups are left for the teams that are free this night."); return; }
     setMessage("");
-    if (!gT1 || !gT2 || gT1 === gT2) { setMessage("Pick two different teams."); return; }
-    const { error } = await supabase.from("league_games").insert({
+    setSlots(out.map(([a, b]) => ({ a, b })));
+  }
+
+  function addBlankRows() {
+    const n = Math.max(1, Math.min(50, Number(count) || 1));
+    setSlots((cur) => [...cur, ...Array.from({ length: n }, () => ({ a: "", b: "" }))]);
+  }
+
+  function setSlot(i: number, patch: Partial<Slot>) {
+    setSlots((cur) => cur.map((s, idx) => (idx === i ? { ...s, ...patch } : s)));
+  }
+
+  async function saveSlots() {
+    if (!ev || night === null) return;
+    setMessage("");
+    const filled = slots.filter((s) => s.a || s.b);
+    if (filled.length === 0) { setMessage("Fill in at least one game."); return; }
+    const seen = new Set(busyIds);
+    for (const [i, s] of filled.entries()) {
+      if (!s.a || !s.b) { setMessage(`Game row ${i + 1}: pick both teams.`); return; }
+      if (s.a === s.b) { setMessage(`Game row ${i + 1}: a team cannot play itself.`); return; }
+      for (const id of [s.a, s.b]) {
+        if (seen.has(id)) { setMessage(`${name(id)} is already playing this night.`); return; }
+        seen.add(id);
+      }
+    }
+    const payload = filled.map((s, i) => ({
       league_event_id: ev.id,
-      game_date: gDate || null,
-      game_no: gNo ? Number(gNo) : null,
-      table_no: gTable ? Number(gTable) : null,
-      team1_id: gT1,
-      team2_id: gT2,
-      kind: gKind,
-    });
+      game_date: night || null,
+      game_no: nextNo + i,
+      team1_id: s.a,
+      team2_id: s.b,
+      kind: "regular",
+    }));
+    const { error } = await supabase.from("league_games").insert(payload);
     if (error) { setMessage(error.message); return; }
-    setGT1(""); setGT2(""); setGNo(""); setGTable("");
+    setSlots([]);
+    setMessage(`${payload.length} game${payload.length === 1 ? "" : "s"} saved for this night.`);
     load();
   }
 
-  async function generate() {
-    if (!ev) return;
+  async function exportExcel() {
+    if (!ev || !league) return;
     setMessage("");
-    if (evTeams.length < 2) { setMessage("Add at least 2 teams first."); return; }
-    if (evGames.some((g) => g.kind === "regular")) {
-      if (!confirm("This category already has games. Generate and add the full schedule anyway?")) return;
+    const { data: pl } = await supabase
+      .from("league_team_players")
+      .select("team_id, player_name")
+      .in("team_id", evTeams.map((t) => t.id));
+    const players: Record<string, string> = {};
+    for (const p of pl ?? []) {
+      players[p.team_id] = players[p.team_id] ? `${players[p.team_id]} / ${p.player_name}` : p.player_name;
     }
-    const rounds = roundRobin(evTeams.map((t) => t.id), ev.rounds === "double");
-    const dates = roundDates(league?.season_start ?? null, league?.game_days ?? [], rounds.length);
-    const payload = rounds.flatMap((round, ri) =>
-      round.map(([a, b], i) => ({
-        league_event_id: ev.id, game_date: dates[ri], game_no: i + 1, team1_id: a, team2_id: b, kind: "regular",
-      }))
-    );
-    const { error } = await supabase.from("league_games").insert(payload);
-    if (error) { setMessage(error.message); return; }
-    setMessage(`${payload.length} games created in ${rounds.length} rounds.${dates[0] ? "" : " Set the league season start and game days to fill in dates automatically."}`);
-    load();
+    try {
+      await downloadLeagueXlsx({
+        leagueName: league.name,
+        categoryName: ev.name,
+        cut: ev.cut,
+        teams: evTeams,
+        games: evGames,
+        players,
+      });
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : "Could not create the Excel file.");
+    }
   }
 
   async function createTiebreaks() {
     if (!ev) return;
     setMessage("");
-    const payload: { league_event_id: string; team1_id: string; team2_id: string; kind: string }[] = [];
+    const payload: { league_event_id: string; team1_id: string; team2_id: string; kind: string; game_date: string | null }[] = [];
     for (const group of needed) {
       for (const [a, b] of pairs(group)) {
         const exists = evGames.some(
           (g) => g.kind === "tiebreak" &&
             ((g.team1_id === a.id && g.team2_id === b.id) || (g.team1_id === b.id && g.team2_id === a.id))
         );
-        if (!exists) payload.push({ league_event_id: ev.id, team1_id: a.id, team2_id: b.id, kind: "tiebreak" });
+        if (!exists) payload.push({ league_event_id: ev.id, team1_id: a.id, team2_id: b.id, kind: "tiebreak", game_date: night || null });
       }
     }
-    if (payload.length === 0) { setMessage("Tiebreak games already exist. Enter their scores below."); return; }
+    if (payload.length === 0) { setMessage("Tiebreak games already exist. Enter their scores in the game night list."); return; }
     const { error } = await supabase.from("league_games").insert(payload);
     if (error) { setMessage(error.message); return; }
-    setMessage(`${payload.length} tiebreak game${payload.length === 1 ? "" : "s"} created. Set a date and enter the score below.`);
+    setMessage(`${payload.length} tiebreak game${payload.length === 1 ? "" : "s"} created on ${night ? shortDate(night) : "the selected night"}.`);
     load();
   }
 
@@ -202,31 +287,69 @@ export default function AdminLeagueGamesPage() {
     load();
   }
 
-  const sorted = [...evGames].sort((a, b) => {
-    if (a.game_date !== b.game_date) {
-      if (!a.game_date) return 1;
-      if (!b.game_date) return -1;
-      return a.game_date.localeCompare(b.game_date);
-    }
-    return (a.game_no ?? 999) - (b.game_no ?? 999);
-  });
-  const groups: { date: string | null; games: Game[] }[] = [];
-  for (const g of sorted) {
-    const last = groups[groups.length - 1];
-    if (last && last.date === g.game_date) last.games.push(g);
-    else groups.push({ date: g.game_date, games: [g] });
-  }
-
   if (!ready) return <main className="p-6 text-gray-400">Loading...</main>;
+
+  const teamLabel = (id: string) => `${teamNo.get(id) ?? "?"}. ${name(id)}`;
+
+  const setForm = (
+    <div className={`flex flex-col gap-3 ${nightGames.length > 0 ? "border-t border-white/10 pt-4" : ""}`}>
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <h3 className="font-semibold">{nightGames.length === 0 ? "Set the games for this night" : "Add more games to this night"}</h3>
+        <div className="flex flex-wrap items-end gap-2">
+          <label className={label}>
+            How many
+            <input className="field !w-20" type="number" min={1} max={50} value={count} onChange={(e) => setCount(e.target.value)} />
+          </label>
+          <button type="button" onClick={suggest} className="btn">Suggest matchups</button>
+          <button type="button" onClick={addBlankRows} className="btn-ghost">Add empty rows</button>
+        </div>
+      </div>
+
+      {slots.length > 0 && (
+        <>
+          <div className="flex flex-col gap-2">
+            {slots.map((s, i) => (
+              <div key={i} className="grid grid-cols-[auto_1fr_auto_1fr_auto] items-center gap-2 text-sm">
+                <span className="w-16 text-gray-400">Game {nextNo + i}</span>
+                <select className="field" value={s.a} onChange={(e) => setSlot(i, { a: e.target.value })}>
+                  <option value="">Team 1</option>
+                  {evTeams.map((t) => <option key={t.id} value={t.id}>{teamLabel(t.id)}</option>)}
+                </select>
+                <span className="text-gray-500">vs</span>
+                <select className="field" value={s.b} onChange={(e) => setSlot(i, { b: e.target.value })}>
+                  <option value="">Team 2</option>
+                  {evTeams.map((t) => <option key={t.id} value={t.id}>{teamLabel(t.id)}</option>)}
+                </select>
+                <button type="button" onClick={() => setSlots((c) => c.filter((_, idx) => idx !== i))}
+                  className="rounded-xl px-3 py-1 text-red-400 hover:bg-red-500/10">Remove</button>
+              </div>
+            ))}
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <button type="button" onClick={saveSlots} className="btn">
+              Save {slots.length} game{slots.length === 1 ? "" : "s"}
+            </button>
+            <button type="button" onClick={() => setSlots((c) => [...c, { a: "", b: "" }])} className="btn-ghost">+ Add a game</button>
+            <button type="button" onClick={() => setSlots([])} className="btn-ghost">Clear</button>
+          </div>
+        </>
+      )}
+      <p className="text-xs text-gray-500">
+        Suggest matchups picks pairs that have not met yet, with no team playing twice on the same night. You can change any team before saving.
+        To postpone, cancel or move a whole night, use the League calendar.
+      </p>
+    </div>
+  );
 
   return (
     <main className="mx-auto flex max-w-4xl flex-col gap-6 p-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Games and scores</h1>
-          <p className="mt-1 text-sm text-gray-400">Schedule games, enter the score of each match and watch the standings.</p>
+          <p className="mt-1 text-sm text-gray-400">Set the games for each game night, enter the scores and watch the standings.</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
+          {ev && <button type="button" onClick={exportExcel} className="btn">Export to Excel</button>}
           <Link href="/admin/leagues/calendar" className="btn-ghost">League calendar</Link>
           <Link href="/dashboard" className="btn-ghost">Dashboard</Link>
         </div>
@@ -236,15 +359,15 @@ export default function AdminLeagueGamesPage() {
 
       <div className="card grid gap-4 sm:grid-cols-2">
         <label className={label}>
-          League
-          <select className="field" value={leagueId} onChange={(e) => { setLeagueId(e.target.value); setEventId(""); }}>
+          1. League
+          <select className="field" value={leagueId} onChange={(e) => { setLeagueId(e.target.value); setEventId(""); setNight(null); }}>
             <option value="">Select a league</option>
             {leagues.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
           </select>
         </label>
         <label className={label}>
-          Category
-          <select className="field" value={eventId} disabled={!leagueId} onChange={(e) => setEventId(e.target.value)}>
+          2. Category
+          <select className="field" value={eventId} disabled={!leagueId} onChange={(e) => { setEventId(e.target.value); setNight(null); }}>
             <option value="">Select a category</option>
             {lEvents.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
           </select>
@@ -253,6 +376,96 @@ export default function AdminLeagueGamesPage() {
 
       {ev && (
         <>
+          {/* Step 3: date */}
+          <section className="card flex flex-col gap-4">
+            <div className="flex flex-wrap items-end justify-between gap-3">
+              <div>
+                <h2 className="text-lg font-semibold">3. Date</h2>
+                <p className="text-sm text-gray-400">Pick a game night, or start a new one.</p>
+              </div>
+              <label className={label}>
+                + New game night
+                <input className="field" type="date" value={night ?? ""} onChange={(e) => { setNight(e.target.value); setSlots([]); }} />
+              </label>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {nightKeys.length === 0 && <p className="text-sm text-gray-500">No game nights yet. Pick a date above.</p>}
+              {nightKeys.map((k) => {
+                const list = evGames.filter((g) => (g.game_date ?? "") === k);
+                const done = list.filter((g) => g.status === "played").length;
+                return (
+                  <button key={k || "none"} type="button" onClick={() => { setNight(k); setSlots([]); }}
+                    className={`rounded-full border px-3 py-1 text-xs ${
+                      k === night ? "border-green-600 bg-green-600/15 text-green-400" : "border-white/15 bg-white/5 text-gray-300 hover:border-green-600"
+                    }`}>
+                    {shortDate(k)} · {done}/{list.length}
+                  </button>
+                );
+              })}
+            </div>
+          </section>
+
+          {/* Step 4: games */}
+          {night !== null && (
+            <section className="card flex flex-col gap-4">
+              <div>
+                <h2 className="text-lg font-semibold">4. Games</h2>
+                <p className="text-sm text-gray-400">
+                  {night ? niceDate(night) : "Games with no date"}
+                  {nightGames.length > 0 ? ` · ${nightPlayed} of ${nightGames.length} played` : " · no games yet"}
+                </p>
+              </div>
+
+              {nightGames.length === 0 && setForm}
+
+              <div className="flex flex-col gap-2">
+                {nightGames.map((g, i) => {
+                  const s = scoreOf(g);
+                  const played = g.status === "played";
+                  const open = g.status === "scheduled" || played;
+                  return (
+                    <div key={g.id} className="card-sm flex flex-col gap-3 text-sm">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <p className="text-gray-400">
+                          Game {g.game_no ?? i + 1}
+                          {g.kind === "tiebreak" && <span className="ml-2 rounded-full bg-amber-900/60 px-2 py-0.5 text-xs text-amber-300">tiebreak</span>}
+                          {played && <span className="ml-2 rounded-full bg-green-900 px-2 py-0.5 text-xs text-green-300">played</span>}
+                          {g.status === "postponed" && <span className="ml-2 rounded-full bg-amber-900/60 px-2 py-0.5 text-xs text-amber-300">postponed</span>}
+                          {g.status === "cancelled" && <span className="ml-2 rounded-full bg-red-900/50 px-2 py-0.5 text-xs text-red-300">cancelled</span>}
+                        </p>
+                        <button onClick={() => remove(g)} className="rounded-xl px-3 py-1 text-red-400 hover:bg-red-500/10">Delete</button>
+                      </div>
+                      <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3">
+                        <p className={`text-right text-base font-semibold ${g.winner_id === g.team1_id ? "text-green-400" : ""}`}>{teamLabel(g.team1_id)}</p>
+                        <div className="flex items-center gap-2">
+                          <input className="field !w-16 !px-2 !py-1.5 text-center" type="number" min={0} disabled={!open}
+                            value={s.a} onChange={(e) => setDraft((c) => ({ ...c, [g.id]: { ...scoreOf(g), a: e.target.value } }))} />
+                          <span className="text-gray-500">-</span>
+                          <input className="field !w-16 !px-2 !py-1.5 text-center" type="number" min={0} disabled={!open}
+                            value={s.b} onChange={(e) => setDraft((c) => ({ ...c, [g.id]: { ...scoreOf(g), b: e.target.value } }))} />
+                        </div>
+                        <p className={`text-base font-semibold ${g.winner_id === g.team2_id ? "text-green-400" : ""}`}>{teamLabel(g.team2_id)}</p>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        {open && <button onClick={() => saveResult(g)} className="btn !px-4 !py-1.5 text-sm">Save result</button>}
+                        {played && <button onClick={() => clearResult(g)} className="btn-ghost !px-4 !py-1.5 text-sm">Clear result</button>}
+                        {!played && (
+                          <select className={small} value={g.status} onChange={(e) => setStatus(g, e.target.value)}>
+                            <option value="scheduled">Scheduled</option>
+                            <option value="postponed">Postponed</option>
+                            <option value="cancelled">Cancelled</option>
+                          </select>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {nightGames.length > 0 && setForm}
+            </section>
+          )}
+
           {/* Standings */}
           <section className="card flex flex-col gap-3">
             <div className="flex flex-wrap items-center justify-between gap-2">
@@ -308,87 +521,6 @@ export default function AdminLeagueGamesPage() {
               <div><button onClick={createTiebreaks} className="btn">Create tiebreak games</button></div>
             </section>
           )}
-
-                    <section className="card flex flex-wrap items-center justify-between gap-3">
-            <p className="text-sm text-gray-400">Games are scheduled on the League calendar. Pick a game night and add the games there.</p>
-            <Link href="/admin/leagues/calendar" className="btn">Open league calendar</Link>
-          </section>
-
-          {/* Games */}
-          <section className="flex flex-col gap-4">
-            <h2 className="text-lg font-semibold">Games ({evGames.length})</h2>
-            {groups.length === 0 && <p className="text-sm text-gray-500">No games yet.</p>}
-            {groups.map((grp) => (
-              <div key={grp.date ?? "none"} className="flex flex-col gap-2">
-                <p className="text-sm font-medium text-green-400">{niceDate(grp.date)}</p>
-                {grp.games.map((g) => {
-                  const s = scoreOf(g);
-                  const played = g.status === "played";
-                  const open = g.status === "scheduled" || played;
-                  return (
-                    <div key={g.id} className="card-sm flex flex-col gap-3 text-sm">
-                      <div className="flex flex-wrap items-center justify-between gap-2">
-                        <p className="text-gray-400">
-                          {g.game_no ? `Game ${g.game_no}` : "Game"}{g.table_no ? ` · Table ${g.table_no}` : ""}
-                          {g.kind === "tiebreak" && (
-                            <span className="ml-2 rounded-full bg-amber-900/60 px-2 py-0.5 text-xs text-amber-300">tiebreak</span>
-                          )}
-                          {played && (
-                            <span className="ml-2 rounded-full bg-green-900 px-2 py-0.5 text-xs text-green-300">played</span>
-                          )}
-                          {g.status === "postponed" && (
-                            <span className="ml-2 rounded-full bg-amber-900/60 px-2 py-0.5 text-xs text-amber-300">postponed</span>
-                          )}
-                          {g.status === "cancelled" && (
-                            <span className="ml-2 rounded-full bg-red-900/50 px-2 py-0.5 text-xs text-red-300">cancelled</span>
-                          )}
-                        </p>
-                        <button onClick={() => remove(g)} className="rounded-xl px-3 py-1 text-red-400 hover:bg-red-500/10">Delete</button>
-                      </div>
-
-                      <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3">
-                        <p className={`text-right text-base font-semibold ${g.winner_id === g.team1_id ? "text-green-400" : ""}`}>
-                          {name(g.team1_id)}
-                        </p>
-                        <div className="flex items-center gap-2">
-                          <input className="field !w-16 !px-2 !py-1.5 text-center" type="number" min={0} disabled={!open}
-                            value={s.a} onChange={(e) => setDraft((c) => ({ ...c, [g.id]: { ...scoreOf(g), a: e.target.value } }))} />
-                          <span className="text-gray-500">-</span>
-                          <input className="field !w-16 !px-2 !py-1.5 text-center" type="number" min={0} disabled={!open}
-                            value={s.b} onChange={(e) => setDraft((c) => ({ ...c, [g.id]: { ...scoreOf(g), b: e.target.value } }))} />
-                        </div>
-                        <p className={`text-base font-semibold ${g.winner_id === g.team2_id ? "text-green-400" : ""}`}>
-                          {name(g.team2_id)}
-                        </p>
-                      </div>
-
-                      <div className="flex flex-wrap items-center gap-2">
-                        {open && (
-                          <button onClick={() => saveResult(g)} className="btn !px-4 !py-1.5 text-sm">Save result</button>
-                        )}
-                        {played && (
-                          <button onClick={() => clearResult(g)} className="btn-ghost !px-4 !py-1.5 text-sm">Clear result</button>
-                        )}
-                        <input className={small} type="date" value={g.game_date ?? ""}
-                          onChange={(e) => update(g, { game_date: e.target.value || null })} />
-                        <input className={small + " w-24"} type="number" min={1} placeholder="Game no." defaultValue={g.game_no ?? ""}
-                          onBlur={(e) => update(g, { game_no: e.target.value ? Number(e.target.value) : null })} />
-                        <input className={small + " w-24"} type="number" min={1} placeholder="Table" defaultValue={g.table_no ?? ""}
-                          onBlur={(e) => update(g, { table_no: e.target.value ? Number(e.target.value) : null })} />
-                        {!played && (
-                          <select className={small} value={g.status} onChange={(e) => setStatus(g, e.target.value)}>
-                            <option value="scheduled">Scheduled</option>
-                            <option value="postponed">Postponed</option>
-                            <option value="cancelled">Cancelled</option>
-                          </select>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            ))}
-          </section>
         </>
       )}
     </main>
