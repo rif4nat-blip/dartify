@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -11,7 +11,6 @@ const playerLinks = [
   ["Browse tournaments", "Find an event and join.", "/tournaments"],
   ["Live brackets", "Follow matches in real time.", "/bracket"],
   ["Leaderboard", "See the points ranking.", "/leaderboard"],
-  ["Leagues", "League schedule, results and standings.", "/leagues"],
   ["My profile", "Your stats and tournament history.", "/profile"],
 ];
 
@@ -21,13 +20,6 @@ const tournamentLinks = [
   ["Bracket and scores", "Start the bracket and enter results.", "/admin/bracket"],
   ["Event points", "Save placements and points.", "/admin/results"],
   ["Printable player list", "Print, PDF or Word.", "/admin/print"],
-];
-
-const leagueLinks = [
-  ["Manage leagues", "Create leagues and their categories.", "/admin/leagues"],
-  ["League teams", "Enter teams, players and registration.", "/admin/leagues/teams"],
-  ["Games and scores", "Schedule games, enter scores, see the standings.", "/admin/leagues/games"],
-  ["League calendar", "Game nights and tournaments. Postpone, cancel or move.", "/admin/leagues/calendar"],
 ];
 
 function CardLink({ title, desc, href }: { title: string; desc: string; href: string }) {
@@ -150,11 +142,6 @@ export default function DashboardPage() {
             title="Tournament tools"
             subtitle="Run one-day events: registrations, brackets and points."
             links={tournamentLinks}
-          />
-          <Group
-            title="League tools"
-            subtitle="Run seasons: teams, game nights, scores and standings."
-            links={leagueLinks}
           />
         </>
       ) : (
